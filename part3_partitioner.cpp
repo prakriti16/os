@@ -33,7 +33,7 @@ void signal_handler(int signal)
         cout << "[" << getpid() << "] received SIGTERM\n" << std::flush;
         for (pid_t pid : child_pids)
         {
-            kill(pid, SIGTERM);
+            kill(pid, SIGTERM);//recursively calls signal_handler to kill all children.
         }
         exit(0);
     }
