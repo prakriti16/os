@@ -24,7 +24,6 @@ int main(int argc, char **argv)
     int chunk_size = search_end_position - search_start_position + 1;
 
     cout << "[" << getpid() << "] start position = " << search_start_position << " ; end position = " << search_end_position << "\n";
-
     if (chunk_size > max_chunk_size)
     {
         int mid = search_start_position + (chunk_size / 2);
@@ -34,7 +33,7 @@ int main(int argc, char **argv)
         {
            
             cout << "[" << getppid() << "] forked left child " << getpid() << "\n";
-            execl("./part2_partitioner.out", "part2_partitioner.out", file_to_search_in, pattern_to_search_for, argv[3], to_string(mid).c_str(),
+            execl("./part2_partitioner.out", "part2_partitioner.out", file_to_search_in, pattern_to_search_for, argv[3], to_string(mid-1).c_str(),
                   to_string(max_chunk_size).c_str(), NULL);
             cerr << "Failed to execute left partitioner.\n";
             return -1;
@@ -46,7 +45,7 @@ int main(int argc, char **argv)
             {
                 
                 cout << "[" << getppid() << "] forked right child " << getpid() << "\n";
-                execl("./part2_partitioner.out", "part2_partitioner.out", file_to_search_in, pattern_to_search_for, to_string(mid + 1).c_str(),
+                execl("./part2_partitioner.out", "part2_partitioner.out", file_to_search_in, pattern_to_search_for, to_string(mid).c_str(),
                       argv[4], to_string(max_chunk_size).c_str(), NULL);
                 cerr << "Failed to execute right partitioner.\n";
                 return -1;
@@ -60,14 +59,14 @@ int main(int argc, char **argv)
                     cerr << "Error waiting for left child process: " << strerror(errno) << "\n";
                     exit(1);
                 }
-                cout << "[" << getpid() << "] left child " << left_pid << " returned\n";
+                cout << "[" << getpid() << "] left child returned\n";
 
                 if (waitpid(right_pid, &status, 0) == -1)
                 {
                     cerr << "Error waiting for right child process: " << strerror(errno) << "\n";
                     exit(1);
                 }
-                cout << "[" << getpid() << "] right child " << right_pid << " returned\n";
+                cout << "[" << getpid() << "] right child returned\n";
             }
             else
             {
@@ -95,14 +94,13 @@ int main(int argc, char **argv)
         }
         else if (searcher_pid > 0)
         {
-            cout << "[" << getpid() << "] forked searcher child " << searcher_pid << "\n";
             int status;
             if (waitpid(searcher_pid, &status, 0) == -1)
             {
                 cerr << "Error waiting for searcher child process: " << strerror(errno) << "\n";
                 exit(1);
             }
-            cout << "[" << getpid() << "] searcher child " << searcher_pid << " returned\n";
+            cout << "[" << getpid() << "] searcher child returned\n";
         }
         else
         {
