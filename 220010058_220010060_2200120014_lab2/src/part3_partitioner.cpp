@@ -11,16 +11,25 @@ using namespace std;
 
 vector<pid_t> child_pids;
 
+bool doesPidExist(pid_t pid) {
+    return (kill(pid, 0) == 0 || errno != ESRCH);
+}
+
 void sigusr1_handler(int signal)
 {
     if (signal == SIGUSR1)
     {
         for (pid_t pid : child_pids)
         {
-            kill(pid, SIGTERM);
+            if (doesPidExist(pid)) {
+                kill(pid, SIGTERM);
+                cout << "[" << pid << "] received SIGTERM\n" << std::flush;
+
+            }
         }
-        if (getppid() > 1) {
+        if (getppid() > 1 && doesPidExist(getppid())) {
             kill(getppid(), SIGUSR1);
+
         }
         exit(0);
     }
@@ -30,10 +39,12 @@ void signal_handler(int signal)
 {
     if (signal == SIGTERM)
     {
-        cout << "[" << getpid() << "] received SIGTERM\n" << std::flush;
         for (pid_t pid : child_pids)
         {
-            kill(pid, SIGTERM);//recursively calls signal_handler to kill all children.
+            if (doesPidExist(pid)) {
+                kill(pid, SIGTERM);
+                cout << "[" << pid << "] received SIGTERM\n" << std::flush;
+            }
         }
         exit(0);
     }
