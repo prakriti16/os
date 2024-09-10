@@ -30,4 +30,8 @@ Waiting time= sum of all intervals where job is waiting to be scheduled (for the
 3.3 waiting queue
 3.4 time counter
 
-
+4. algorithms:
+FIFO-> scheduler runs when burst finishes.
+SJF non pre-emptive -> scheduler runs when cpu burst ends or arrival time of process.
+SRTF-> shortest remaining time first equivalent to SJF with preemption
+RR-> scheduler runs when cpu burst ends and every quantum.
