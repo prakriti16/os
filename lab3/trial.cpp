@@ -16,5 +16,8 @@ int main(int argc, char **argv)
 			cout << argv[i] << "\n";
 		return -1;
 	}
-    
+
+    char *scheduling_algo = argv[1];
+	char *workload_description_file = argv[2];
+
 }
