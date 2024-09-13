@@ -19,5 +19,13 @@ int main(int argc, char **argv)
 
     char *scheduling_algo = argv[1];
 	char *workload_description_file = argv[2];
+    ifstream file(workload_description_file);
+    string line;
+    while (getline(file, line)) {
+        if(line=="<pre>"){
+            cout<<"no";
+        }
+        cout<<line<<endl;
+    }
 
 }

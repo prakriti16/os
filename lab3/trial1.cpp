@@ -15,10 +15,11 @@ struct Process {
     int id;
     int arrival_time;
     vector<Burst> bursts;
-    int current_burst; // Track current CPU burst being executed
+    int current_burst; // Track current CPU burst being executed buttttt dont we need to track with two seperat epointers 
+    //because one goes in 
     int remaining_time; // Time left for current CPU burst (for preemption)
 
-    Process(int id, int arrival) : id(id), arrival_time(arrival), current_burst(0), remaining_time(0) {}
+    Process(int id, int arrival) : id(id), arrival_time(arrival), current_burst(1), remaining_time(0) {}
 };
 
 vector<Process> parseWorkload(char* workload_description_file) {
@@ -97,4 +98,27 @@ void calculateMetrics(const vector<Process>& processes) {
     cout << "Makespan: " << makespan << endl;
     cout << "Average Waiting Time: " << average_waiting_time << endl;
     cout << "Maximum Waiting Time: " << max_waiting_time << endl;
+}
+
+int main(int argc, char **argv)
+{
+	if(argc != 3)
+	{
+		cout <<"usage: ./partitioner.out  <scheduling-algorithm> <path-to-workload-description-file> \nprovided arguments:\n";
+		for(int i = 0; i < argc; i++)
+			cout << argv[i] << "\n";
+		return -1;
+	}
+
+    char *scheduling_algo = argv[1];
+	char *workload_description_file = argv[2];
+    ifstream file(workload_description_file);
+    
+    vector<Process> p1= parseWorkload(workload_description_file);
+    for( auto i: p1){
+        cout<<i.current_burst<<endl;
+    }
+
+    fifoScheduling(p1);
+    calculateMetrics(p1);
 }
