@@ -33,7 +33,7 @@ void checkArrivals(vector<Process>& processes, int currentTime, queue<int>& read
 int main()
 {
     freopen("input.txt", "r", stdin);
-    freopen("output.txt", "w", stdout);
+    //freopen("output.txt", "w", stdout);
     int nop, timeQuantum;
     //cout << "Enter the number of processes: ";
     cin >> nop;
@@ -204,8 +204,12 @@ int main()
             }
             else{
                 p.isComplete = true;
+                p.comptime=currentTime;
                 //cout<<p.processID<<"finishd at"<<currentTime<<endl;
                 totalProcessesCompleted++;
+                p.turnaroundTime = currentTime - p.arrivalTime;
+                p.inIOQueue=false;
+                p.inReadyQueue=false;
             }
         }
         else
