@@ -2,9 +2,9 @@
 #include <fstream>
 #include <vector>
 #include <queue>
-#include <sstream>
 #include <climits>
 using namespace std;
+
 struct Process
 {
     int processID;
@@ -13,17 +13,15 @@ struct Process
     int waitingTime = 0;
     int turnaroundTime = 0;
     int currentBurstIndex = 0; // Tracks the current burst (either CPU or I/O)
-    //bool isIOBurst = false;     // True if the current burst is I/O
     int ioEndTime = 0;         // When I/O will complete
     bool isComplete = false;   // To check if the process has finished
-    bool inReadyQueue, inIOQueue;
-    int comptime=-1;//completion time
+    bool inReadyQueue = false, inIOQueue = false;
 };
+
 // Function to check and add arrived processes to the ready queue
 void checkArrivals(vector<Process>& processes, int currentTime, queue<int>& readyQueue) {
     for (auto& process : processes) {
-        // If process has arrived and is not in the IO queue and not already in the ready queue
-        if (process.arrivalTime <= currentTime && !process.inReadyQueue && !process.inIOQueue) {
+        if (process.arrivalTime <= currentTime && !process.inReadyQueue && !process.inIOQueue && !process.isComplete) {
             readyQueue.push(process.processID);
             process.inReadyQueue = true;  // Mark it as being in the ready queue
         }
@@ -33,20 +31,16 @@ void checkArrivals(vector<Process>& processes, int currentTime, queue<int>& read
 int main()
 {
     freopen("input.txt", "r", stdin);
-    freopen("output.txt", "w", stdout);
     int nop, timeQuantum;
-    //cout << "Enter the number of processes: ";
     cin >> nop;
 
     vector<Process> processes(nop);
 
+    // Input for processes
     for (int i = 0; i < nop; ++i)
     {
         processes[i].processID = i;
-        //cout << "Enter the arrival time for process " << i + 1 << ": ";
         cin >> processes[i].arrivalTime;
-        //cout << "Enter the arrival time for process " << i + 1 << ": "<<processes[i].arrivalTime<<endl;
-        //cout << "Enter the bursts (alternating CPU/I-O bursts) for process " << i + 1 << " (end with -1): ";
         int burst;
         while (true)
         {
@@ -54,18 +48,11 @@ int main()
             if (burst == -1)
                 break;
             processes[i].bursts.push_back(burst);
-            //cout << "Enter the bursts (alternating CPU/I-O bursts) for process " << i + 1 << " (end with -1): "<<processes[i].bursts.back()<<endl;
         }
-
         processes[i].currentBurstIndex = 0;
     }
 
-    //cout << "Enter the time quantum: ";
     cin >> timeQuantum;
-    //cout << "Enter the time quantum: "<<timeQuantum;
-
-    //int currentTime = 0;
-    //bool done;
 
     int currentTime = 0;
     int totalProcessesCompleted = 0;
@@ -78,7 +65,6 @@ int main()
         if (processes[i].arrivalTime == 0){
             readyQueue.push(i);
             processes[i].inReadyQueue = true; 
-            //cout<<i<<processes[i].inReadyQueue<<endl;
         }
     }
 
@@ -93,10 +79,8 @@ int main()
             {
                 readyQueue.push(pid); // Move to ready queue
                 it = ioQueue.erase(it); // Remove from I/O queue
-                processes[pid].inReadyQueue=true;
-                processes[pid].inIOQueue=false;
-                //processes[pid].currentBurstIndex+=1;
-                //cout<<processes[pid].processID<<"ct"<<currentTime<<endl;
+                processes[pid].inReadyQueue = true;
+                processes[pid].inIOQueue = false;
             }
             else
             {
@@ -104,14 +88,8 @@ int main()
             }
         }
 
-        for (auto& process : processes) {
-        // If process has arrived and is not in the IO queue and not already in the ready queue
-        if (process.arrivalTime <= currentTime && !process.inReadyQueue && !process.inIOQueue && !process.isComplete) {
-            readyQueue.push(process.processID);
-            process.inReadyQueue = true;  // Mark it as being in the ready queue
-            
-        }
-        }
+        // Check for new arrivals and add them to the ready queue
+        checkArrivals(processes, currentTime, readyQueue);
 
         if (!readyQueue.empty()) // If there are processes in the ready queue
         {
@@ -119,22 +97,21 @@ int main()
             readyQueue.pop();
 
             Process &p = processes[currentProcessID];
+            p.inReadyQueue = false;
+
             if (p.currentBurstIndex < p.bursts.size()) {
                 int currentBurst = p.bursts[p.currentBurstIndex];
                 bool isCpuBurst = p.currentBurstIndex % 2 == 0;
 
                 if (isCpuBurst)
                 {
-                    int cpburind=p.currentBurstIndex/2+1;
                     // Process the CPU burst for the current time quantum or until the burst completes
                     int timeToExecute = min(currentBurst, timeQuantum);
-                    cout << "P" << p.processID + 1 << ","<<cpburind
-                                    <<"\t"<< currentTime << "\t" << currentTime+ timeToExecute<< endl;
-                        
+
                     // Increment waiting time for all other ready processes
                     for (int i = 0; i < nop; ++i)
                     {
-                        if (i != currentProcessID && processes[i].inReadyQueue )
+                        if (i != currentProcessID && processes[i].inReadyQueue)
                         {
                             processes[i].waitingTime += timeToExecute;
                         }
@@ -143,68 +120,43 @@ int main()
                     // Update current burst and time
                     p.bursts[p.currentBurstIndex] -= timeToExecute;
                     currentTime += timeToExecute;
-                    for (auto& process : processes) {
-                        // If process has arrived and is not in the IO queue and not already in the ready queue
-                        if (process.arrivalTime <= currentTime && !process.inReadyQueue && !process.inIOQueue && !process.isComplete) {
-                            readyQueue.push(process.processID);
-                            process.inReadyQueue = true;  // Mark it as being in the ready queue
-                            
-                        }
-                        
-                    }
 
-                    if (p.bursts[p.currentBurstIndex] == 0) // If the CPU burst is finished
+                    // Check if the CPU burst is finished
+                    if (p.bursts[p.currentBurstIndex] == 0) 
                     {
                         p.currentBurstIndex++; // Move to the next burst, which might be I/O
-                        if (p.currentBurstIndex == p.bursts.size()) // If all bursts are done
+                        
+                        // If all bursts are done
+                        if (p.currentBurstIndex == p.bursts.size()) 
                         {
                             p.isComplete = true;
-                            p.comptime=currentTime;
                             totalProcessesCompleted++;
                             p.turnaroundTime = currentTime - p.arrivalTime;
-                            p.inIOQueue=false;
-                            p.inReadyQueue=false;
+                            p.inIOQueue = false;
+                            p.inReadyQueue = false;
 
-                            //cout << "P" << p.processID + 1 << ","<< p.turnaroundTime << "\t\t" << p.waitingTime << endl;
+                            cout << "Process " << p.processID + 1 << "\t\t"
+                                    << p.turnaroundTime << "\t\t" << p.waitingTime << endl;
                         }
-                        else
+                        // If the next burst is an I/O burst, move to I/O queue
+                        else if (p.currentBurstIndex % 2 != 0) 
                         {
-                            // If the next burst is an I/O burst, move to I/O queue
-                            if (p.currentBurstIndex % 2 != 0)
-                            {
-                                int ioBurst = p.bursts[p.currentBurstIndex];
-                                p.ioEndTime = currentTime + ioBurst; // Set when I/O will finish
-                                ioQueue.push_back(p.processID);      // Move to I/O queue
-                                p.currentBurstIndex++;               // Move past the I/O burst
-                                p.inIOQueue=true;
-                                p.inReadyQueue=false;
-                            }
-                            else
-                            {
-                                // If the next burst is CPU, re-add the process to ready queue
-                                //cout<<"errcpuuagain?"<<endl;
-                            }
+                            int ioBurst = p.bursts[p.currentBurstIndex];
+                            p.ioEndTime = currentTime + ioBurst; // Set when I/O will finish
+                            ioQueue.push_back(p.processID);      // Move to I/O queue
+                            p.inIOQueue = true;
                         }
                     }
                     else
                     {
                         // Re-add the process to the ready queue if it still has CPU burst left
                         readyQueue.push(currentProcessID);
-                        p.inIOQueue=false;
-                        p.inReadyQueue=true;
-                        //cout<<"how much more ugh"<<p.bursts[p.currentBurstIndex]<<endl;
-                        //cout<<"waitwattttt"<<p.currentBurstIndex<<"omgggg"<<p.bursts.size()<<endl;
-                        
+                        p.inReadyQueue = true;
                     }
                 }
-                else{
-                    //cout<<"nevercomeback"<<endl;
-                }
-                
             }
             else{
                 p.isComplete = true;
-                //cout<<p.processID<<"finishd at"<<currentTime<<endl;
                 totalProcessesCompleted++;
             }
         }
@@ -229,8 +181,10 @@ int main()
             }
 
             // Advance the current time to the next significant event
-            if(nextEventTime!=INT_MAX)
+            if (nextEventTime != INT_MAX)
                 currentTime = nextEventTime;
+            else
+                break;  // Prevent infinite loop if no future event exists
         }
     }
 
@@ -241,20 +195,7 @@ int main()
         averageWaitingTime += processes[i].waitingTime;
         averageTurnaroundTime += processes[i].turnaroundTime;
     }
-    int maxwaittime=0,maxcomplettime=0,minmkspt=0,maxmkspt=0;
-    for (int i = 0; i < nop; ++i)
-    {
-        maxwaittime = max(maxwaittime,processes[i].waitingTime);
-        maxcomplettime = max(maxcomplettime, processes[i].turnaroundTime);
-        maxmkspt=max(maxmkspt,processes[i].comptime);
-        minmkspt=min(minmkspt,processes[i].arrivalTime);
-        cout<<"P"<<i+1<<" arrival time: "<<processes[i].arrivalTime<<" completion time: "<<processes[i].comptime<<" waiting time: "<<processes[i].waitingTime<<endl;
 
-    }
-    int makspan=maxmkspt-minmkspt;
-    cout<<"Makespan: "<<makspan<<endl;
     cout << "Average Waiting Time: " << averageWaitingTime / nop << endl;
-    cout << "mean completion Time: " << averageTurnaroundTime / nop <<endl;
-    cout << "maximum Waiting Time: " << maxwaittime << endl;
-    cout << "maximum Turnaround Time: " << maxcomplettime <<endl;
+    cout << "Average Turnaround Time: " << averageTurnaroundTime / nop << endl;
 }
