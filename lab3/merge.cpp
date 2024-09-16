@@ -6,7 +6,6 @@
 #include <fstream>
 #include <sstream>
 #include <numeric>
-#include <limits>
 #include <climits>
 using namespace std;
 
@@ -23,6 +22,7 @@ struct Process {
     int completionTime;
     int lastIOEndTime;
     int currentBurstIndex;
+    int totruntime;
     bool inIO;
     bool completed;
     int id; // To keep track of process IDs
@@ -70,6 +70,7 @@ vector<Process> parseProcesses(const string &filename) {
         p.currentBurstIndex = 0;
         p.inIO = false;
         p.completed = false;
+        p.totruntime=0;
 
         int value;
         while (iss >> value) {
@@ -100,6 +101,7 @@ void calculateAndDisplayMetrics(const vector<Process> &processes) {
     int totalWaitingTime = 0;
     int maxCompletionTime = 0;
     int maxWaitingTime = 0;
+    int totruntime=0;
 
     for (const auto &p : processes) {
         int burstTotal = accumulate(p.bursts.begin(), p.bursts.end(), 0,
@@ -107,6 +109,7 @@ void calculateAndDisplayMetrics(const vector<Process> &processes) {
         int waitingTime = p.completionTime - p.arrivalTime - burstTotal;
         totalWaitingTime += waitingTime;
         totalCompletionTime += p.completionTime;
+        totruntime+=p.totruntime;
         maxWaitingTime = max(maxWaitingTime, waitingTime);
         maxCompletionTime = max(maxCompletionTime, p.completionTime);
     }
@@ -121,16 +124,17 @@ void calculateAndDisplayMetrics(const vector<Process> &processes) {
         int burstTotal = accumulate(p.bursts.begin(), p.bursts.end(), 0,
             [](int sum, const Burst &b) { return sum + b.duration; });
         int waitingTime = p.completionTime - p.arrivalTime - burstTotal;
-        cout << "ProcessId " << p.id << " Arrival Time: " << p.arrivalTime
+        cout << "P" << p.id+1 << " Arrival Time: " << p.arrivalTime
              << " Completion Time: " << p.completionTime
              << " Waiting Time: " << waitingTime << endl;
     }
     cout << "-----------------" << endl;
     cout << "Make Span: " << makespan << endl;
-    cout << "Completion Time: [AVG]: " << avgCompletionTime
-         << " [MAX]: " << maxCompletionTime << endl;
-    cout << "Waiting Time: [AVG]: " << avgWaitingTime
-         << " [MAX]: " << maxWaitingTime << endl;
+    cout<<"Total execution time: "<<totruntime<<endl;
+    cout << "Completion Time: [AVG]: " << avgCompletionTime<<endl;
+    cout << "Completion Time: [MAX]: " << maxCompletionTime << endl;
+    cout << "Waiting Time: [AVG]: " << avgWaitingTime<<endl;
+    cout<< "Waiting Time: [MAX]: " << maxWaitingTime << endl;
     cout << "-----------------" << endl;
 }
 void rrsched(const char* filename){
@@ -156,6 +160,7 @@ void rrsched(const char* filename){
     while (getline(file, line)) {
         nop++;
     }
+    file.close();
     //cout<<nop1;
     vector<ProcessRR> processes(nop);
 
@@ -188,6 +193,7 @@ void rrsched(const char* filename){
 
     int currentTime = 0;
     int totalProcessesCompleted = 0;
+    int totruntime=0; //total runtime without waiting time
     queue<int> readyQueue;  // Queue to manage processes that are ready for CPU
     vector<int> ioQueue;    // Store processes in I/O burst with their completion times
 
@@ -245,8 +251,10 @@ void rrsched(const char* filename){
                 if (isCpuBurst)
                 {
                     int cpburind=p.currentBurstIndex/2+1;
+                    
                     // Process the CPU burst for the current time quantum or until the burst completes
                     int timeToExecute = min(currentBurst, timeQuantum);
+                    totruntime+=timeToExecute;
                     cout << "P" << p.processID + 1 << ","<<cpburind
                                     <<"\t"<< currentTime << "\t" << currentTime+ timeToExecute<< endl;
                         
@@ -365,21 +373,27 @@ void rrsched(const char* filename){
         averageTurnaroundTime += processes[i].turnaroundTime;
     }
     int maxwaittime=0,maxcomplettime=0,minmkspt=0,maxmkspt=0;
+    
+    
+    cout << "********* METRICS *********" << endl;
     for (int i = 0; i < nop; ++i)
     {
         maxwaittime = max(maxwaittime,processes[i].waitingTime);
         maxcomplettime = max(maxcomplettime, processes[i].turnaroundTime);
         maxmkspt=max(maxmkspt,processes[i].comptime);
         minmkspt=min(minmkspt,processes[i].arrivalTime);
-        cout<<"P"<<i+1<<" arrival time: "<<processes[i].arrivalTime<<" completion time: "<<processes[i].comptime<<" waiting time: "<<processes[i].waitingTime<<endl;
+        cout<<"P"<<i+1<<" Arrival time: "<<processes[i].arrivalTime<<" Completion time: "<<processes[i].comptime<<" Waiting time: "<<processes[i].waitingTime<<endl;
 
     }
     int makspan=maxmkspt-minmkspt;
+    cout << "-----------------" << endl;
     cout<<"Makespan: "<<makspan<<endl;
-    cout << "Average Waiting Time: " << averageWaitingTime / nop << endl;
-    cout << "mean completion Time: " << averageTurnaroundTime / nop <<endl;
-    cout << "maximum Waiting Time: " << maxwaittime << endl;
-    cout << "maximum Turnaround Time: " << maxcomplettime <<endl;
+    cout<<"Total execution time: "<<totruntime<<endl;
+    cout << "Completion Time: [AVG]: " << averageTurnaroundTime / nop <<endl;
+    cout << "Completion Time: [MAX]: " << maxcomplettime <<endl;
+    cout << "Waiting Time: [AVG]: " << averageWaitingTime / nop << endl;
+    cout << "Waiting Time: [MAX]: " << maxwaittime << endl;
+    cout << "-----------------" << endl;
 }
 void fifoScheduler(vector<Process> &processes) {
     queue<Process*> readyQueue;
@@ -437,6 +451,7 @@ void fifoScheduler(vector<Process> &processes) {
             schedule.emplace_back(p->id+1,p->currentBurstIndex+1, burstStart, burstEnd);
 
             currentTime = burstEnd;
+            p->totruntime+=burst.duration;
             p->currentBurstIndex++;
             p->remainingTime -= burst.duration;
 
