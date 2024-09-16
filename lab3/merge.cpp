@@ -52,7 +52,13 @@ vector<Process> parseProcesses(const string &filename) {
     }
 
     string line;
+    getline(file, line);
+    getline(file, line);
+    getline(file, line);
     while (getline(file, line)) {
+        if(line.find("</pre>") != string::npos){
+            break;
+        }
         stringstream iss(line);
         Process p;
         p.id = id++;
@@ -132,7 +138,7 @@ void rrsched(const char* filename){
     freopen(filename, "r", stdin);
     string h1,h2,h3,hend;
     cin>>h1>>h2>>h3;
-    cout<<h1<<h2<<h3<<endl;
+    //cout<<h1<<h2<<h3<<endl;
     //freopen("output.txt", "w", stdout);
     int timeQuantum=10;
     //cout << "Enter the number of processes: ";
@@ -378,7 +384,7 @@ void rrsched(const char* filename){
 void fifoScheduler(vector<Process> &processes) {
     queue<Process*> readyQueue;
     queue<Process*> waitQueue;
-    vector<tuple<int, int, int>> schedule; // (ProcessID, Start Time, End Time)
+    vector<tuple<int,int, int, int>> schedule; // (ProcessID, current burst, Start Time, End Time)
     int currentTime = 0;
 
     // Copy and sort processes by arrival time
@@ -428,7 +434,7 @@ void fifoScheduler(vector<Process> &processes) {
             Burst &burst = p->bursts[p->currentBurstIndex];
             int burstStart = currentTime;
             int burstEnd = burstStart + burst.duration;
-            schedule.emplace_back(p->id, burstStart, burstEnd);
+            schedule.emplace_back(p->id+1,p->currentBurstIndex+1, burstStart, burstEnd);
 
             currentTime = burstEnd;
             p->currentBurstIndex++;
@@ -447,7 +453,7 @@ void fifoScheduler(vector<Process> &processes) {
     }
 
     for (const auto &entry : schedule) {
-        cout << "P" << get<0>(entry) << " " << get<1>(entry) << ", " << get<2>(entry) << endl;
+        cout << "P" << get<0>(entry) << "," << get<1>(entry) << "\t " << get<2>(entry)<< "\t " << get<3>(entry) << endl;
     }
 
     calculateAndDisplayMetrics(processes);
