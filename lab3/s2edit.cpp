@@ -277,7 +277,7 @@ void fifowith2Processor(vector<Process> &processes) {
 
 
 
-void rrsched(const char* filename){
+void rrschedWith2Processors(const char* filename){
 
     freopen(filename, "r", stdin);
     string h1,h2,h3,hend;
