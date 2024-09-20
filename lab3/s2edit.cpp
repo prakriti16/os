@@ -277,11 +277,10 @@ void fifowith2Processor(vector<Process> &processes) {
 
 
 
-void rrschedWith2Processors(const char* filename){
-
+void rrschedWith2Processors(const char* filename) {
     freopen(filename, "r", stdin);
     string h1,h2,h3,hend;
-    cin>>h1>>h2>>h3;
+    cin >> h1 >> h2 >> h3;
     int timeQuantum = 10;
     ifstream file(filename);
     int id = 0, nop = -4;
@@ -298,73 +297,55 @@ void rrschedWith2Processors(const char* filename){
     file.close();
     vector<ProcessRR> processes(nop);
 
-    for (int i = 0; i < nop; ++i)
-    {
+    for (int i = 0; i < nop; ++i) {
         processes[i].processID = i;
         cin >> processes[i].arrivalTime;
         int burst;
-        while (true)
-        {
+        while (true) {
             cin >> burst;
             if (burst == -1)
                 break;
             processes[i].bursts.push_back(burst);
             processes[i].totbursts += burst;
         }
-
         processes[i].currentBurstIndex = 0;
     }
     cin >> hend;
 
     int currentTime = 0;
     int totalProcessesCompleted = 0;
-    
-    // Two ready queues for two processors
-    queue<int> readyQueue1, readyQueue2; 
+
+    // Single ready queue shared between both processors
+    queue<int> readyQueue;
     vector<int> ioQueue;  // Shared I/O queue
 
-    // Distribute processes between two processors (even/odd ID assignment)
-    for (int i = 0; i < nop; ++i)
-    {
+    // Add processes that have arrived at time 0 to the ready queue
+    for (int i = 0; i < nop; ++i) {
         if (processes[i].arrivalTime == 0) {
-            if (i % 2 == 0) {
-                readyQueue1.push(i);
-                processes[i].inReadyQueue = true;
-            } else {
-                readyQueue2.push(i);
-                processes[i].inReadyQueue = true;
-            }
+            readyQueue.push(i);
+            processes[i].inReadyQueue = true;
         }
     }
 
     // Loop until all processes have completed
-    while (totalProcessesCompleted < nop)
-    {
-        // Move processes that have completed their I/O back to the appropriate ready queue
-        for (auto it = ioQueue.begin(); it != ioQueue.end();)
-        {
+    while (totalProcessesCompleted < nop) {
+        // Move processes that have completed their I/O back to the ready queue
+        for (auto it = ioQueue.begin(); it != ioQueue.end();) {
             int pid = *it;
-            if (processes[pid].ioEndTime <= currentTime)
-            {
-                if (pid % 2 == 0)
-                    readyQueue1.push(pid); // Assign to processor 1
-                else
-                    readyQueue2.push(pid); // Assign to processor 2
-                
+            if (processes[pid].ioEndTime <= currentTime) {
+                readyQueue.push(pid); // Assign to the shared ready queue
                 it = ioQueue.erase(it); // Remove from I/O queue
                 processes[pid].inReadyQueue = true;
                 processes[pid].inIOQueue = false;
-            }
-            else
-            {
+            } else {
                 ++it;
             }
         }
 
-        // Processor 1 execution
-        if (!readyQueue1.empty()) {
-            int currentProcessID = readyQueue1.front();
-            readyQueue1.pop();
+        // Processor 1 execution (if the ready queue is not empty)
+        if (!readyQueue.empty()) {
+            int currentProcessID = readyQueue.front();
+            readyQueue.pop();
 
             ProcessRR &p = processes[currentProcessID];
             if (p.currentBurstIndex < p.bursts.size()) {
@@ -398,16 +379,16 @@ void rrschedWith2Processors(const char* filename){
                             p.currentBurstIndex++;
                         }
                     } else {
-                        readyQueue1.push(currentProcessID);
+                        readyQueue.push(currentProcessID);
                     }
                 }
             }
         }
 
-        // Processor 2 execution
-        if (!readyQueue2.empty()) {
-            int currentProcessID = readyQueue2.front();
-            readyQueue2.pop();
+        // Processor 2 execution (if the ready queue is not empty)
+        if (!readyQueue.empty()) {
+            int currentProcessID = readyQueue.front();
+            readyQueue.pop();
 
             ProcessRR &p = processes[currentProcessID];
             if (p.currentBurstIndex < p.bursts.size()) {
@@ -441,14 +422,14 @@ void rrschedWith2Processors(const char* filename){
                             p.currentBurstIndex++;
                         }
                     } else {
-                        readyQueue2.push(currentProcessID);
+                        readyQueue.push(currentProcessID);
                     }
                 }
             }
         }
 
-        // If both ready queues are empty, advance time to the next event
-        if (readyQueue1.empty() && readyQueue2.empty()) {
+        // If the ready queue is empty, advance time to the next significant event
+        if (readyQueue.empty()) {
             int nextEventTime = INT_MAX;
             for (int i = 0; i < ioQueue.size(); ++i) {
                 nextEventTime = min(nextEventTime, processes[ioQueue[i]].ioEndTime);
