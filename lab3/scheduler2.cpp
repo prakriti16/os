@@ -11,11 +11,11 @@ struct Process {
     int arrivalTime;
     vector<Burst> bursts;
     int remainingTime;
-    int waitTime;
     int completionTime;
     int lastIOEndTime;
     int currentBurstIndex;
     bool inIO;
+    int totbursts;
     bool completed;
     int id; // To keep track of process IDs
 };
@@ -28,7 +28,6 @@ struct ProcessRR
     int processID;
     int arrivalTime;
     vector<int> bursts; // Alternating CPU and I/O bursts
-    int waitingTime = 0;
     int turnaroundTime = 0;
     int currentBurstIndex = 0; // Tracks the current burst (either CPU or I/O)
     int ioEndTime = 0;         // When I/O will complete
@@ -59,12 +58,12 @@ vector<Process> parseProcesses(const string &filename) {
         p.id = id++;
         p.arrivalTime = -1;
         p.remainingTime = 0;
-        p.waitTime = 0;
         p.completionTime = 0;
         p.lastIOEndTime = 0;
         p.currentBurstIndex = 0;
         p.inIO = false;
         p.completed = false;
+        p.totbursts=0;
 
         int value;
         while (iss >> value) {
@@ -82,6 +81,7 @@ vector<Process> parseProcesses(const string &filename) {
                     burst.ioDuration = value;
                 }
                 p.bursts.push_back(burst);
+                p.totbursts+=burst.ioDuration+burst.duration;
             }
         }
         processes.push_back(p);
@@ -125,11 +125,11 @@ void calculateAndDisplayMetrics(const vector<Process> &processes) {
     int minarr=0;
 
     for (const auto &p : processes) {
-        int burstTotal = accumulate(p.bursts.begin(), p.bursts.end(), 0,
-            [](int sum, const Burst &b) { return sum + b.duration; });
-        totalWaitingTime += p.waitTime;
+        int burstTotal =  p.totbursts;
+        int waitingTime = p.completionTime - p.arrivalTime - burstTotal;
+        totalWaitingTime += waitingTime;
         totalCompletionTime += p.completionTime - p.arrivalTime;
-        maxWaitingTime = max(maxWaitingTime, p.waitTime);
+        maxWaitingTime = max(maxWaitingTime, waitingTime);
         maxCompletionTime = max(maxCompletionTime, p.completionTime - p.arrivalTime);
         maxexit=max(maxexit,p.completionTime);
         minarr=min(minarr,p.arrivalTime);
@@ -142,11 +142,10 @@ void calculateAndDisplayMetrics(const vector<Process> &processes) {
     // Output metrics
     cout << "********* METRICS *********" << endl;
     for (const auto &p : processes) {
-        int burstTotal = accumulate(p.bursts.begin(), p.bursts.end(), 0,
-            [](int sum, const Burst &b) { return sum + b.duration; });
+        int burstTotal =  p.totbursts;
         cout << "P" << p.id+1 << " Arrival Time: " << p.arrivalTime
              << " Exit Time: " << p.completionTime
-             << " Waiting Time: " << p.waitTime << endl;
+             << " Waiting Time: " << p.completionTime - p.arrivalTime - p.totbursts<< endl;
     }
     cout << "-----------------" << endl;
     cout << "Make Span: " << makespan << endl;
@@ -239,15 +238,6 @@ void fifowith2Processor(vector<Process> &processes) {
             schedule.emplace_back(p->id + 1, p->currentBurstIndex + 1, burstStart, burstEnd, currentCPU);
             currentTime = burstEnd;
             p->remainingTime -= burst.duration;
-
-            // Update waiting times for all other processes in the ready queue
-            queue<Process*> temp = readyQueue;
-            while (!readyQueue.empty()) {
-                Process* p1 = readyQueue.front();
-                readyQueue.pop();
-                p1->waitTime += burst.duration;
-            }
-            readyQueue = temp;
 
             // After the current burst, push the process to the wait queue if there's an I/O burst
             if (p->currentBurstIndex < p->bursts.size()) {
@@ -372,14 +362,6 @@ void sjfwith2Processor(vector<Process> &processes) {
 
             schedule.emplace_back(p->id + 1, p->currentBurstIndex + 1, burstStart, burstEnd, currentCPU);
             
-            // Update waiting times for other processes in the ready queue
-            priority_queue<Process*, vector<Process*>, SJFComparator> temp = readyQueue; 
-            while(!readyQueue.empty()){
-                Process* p1 = readyQueue.top();
-                readyQueue.pop();
-                p1->waitTime += burst.duration;
-            }
-            readyQueue = temp;
 
             // Update current time after executing the CPU burst
             currentTime = burstEnd;
@@ -522,14 +504,6 @@ void psjfSchedulerTwoProcessors(vector<Process> &processes) {
             p->remainingTime -= timeToExecute;
             burst.duration -= timeToExecute;  // Reduce the burst duration by the time executed
 
-            // Update waiting times for other processes in the ready queue
-            priority_queue<Process*, vector<Process*>, SJFComparator> temp = readyQueue; 
-            while (!readyQueue.empty()) {
-                Process* p1 = readyQueue.top();
-                readyQueue.pop();
-                p1->waitTime += timeToExecute;
-            }
-            readyQueue = temp;
 
             // If the burst is not yet completed, push the process back into the ready queue
             if (burst.duration > 0) {
