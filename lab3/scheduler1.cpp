@@ -128,10 +128,11 @@ void calculateAndDisplayMetrics(const vector<Process> &processes) {
 
     for (const auto &p : processes) {
         int burstTotal = accumulate(p.bursts.begin(), p.bursts.end(), 0,
-            [](int sum, const Burst &b) { return sum + b.duration; });
-        totalWaitingTime += p.waitTime;
+            [](int sum, const Burst &b) { return sum + b.duration+b.ioDuration; });
+        int waitingTime = p.completionTime - p.arrivalTime - burstTotal;
+        totalWaitingTime += waitingTime;
         totalCompletionTime += p.completionTime - p.arrivalTime;
-        maxWaitingTime = max(maxWaitingTime, p.waitTime);
+        maxWaitingTime = max(maxWaitingTime, waitingTime);
         maxCompletionTime = max(maxCompletionTime, p.completionTime - p.arrivalTime);
         maxexit=max(maxexit,p.completionTime);
         minarr=min(minarr,p.arrivalTime);
@@ -145,7 +146,7 @@ void calculateAndDisplayMetrics(const vector<Process> &processes) {
     cout << "********* METRICS *********" << endl;
     for (const auto &p : processes) {
         int burstTotal = accumulate(p.bursts.begin(), p.bursts.end(), 0,
-            [](int sum, const Burst &b) { return sum + b.duration; });
+            [](int sum, const Burst &b) { return sum + b.duration+b.ioDuration; });
         cout << "P" << p.id+1 << " Arrival Time: " << p.arrivalTime
              << " Exit Time: " << p.completionTime
              << " Waiting Time: " << p.waitTime << endl;
