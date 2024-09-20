@@ -17,6 +17,7 @@ struct Process {
     int currentBurstIndex;
     bool inIO;
     bool completed;
+    int totbursts;
     int id; // To keep track of process IDs
         int turnAroundTime = 0; 
 };
@@ -26,7 +27,7 @@ struct ProcessRR
     int processID;
     int arrivalTime;
     vector<int> bursts; // Alternating CPU and I/O bursts
-    int waitingTime = 0;
+    int totbursts = 0;
     int turnaroundTime = 0;
     int currentBurstIndex = 0; // Tracks the current burst (either CPU or I/O)
     int ioEndTime = 0;         // When I/O will complete
@@ -63,6 +64,7 @@ vector<Process> parseProcesses(const string &filename) {
         p.currentBurstIndex = 0;
         p.inIO = false;
         p.completed = false;
+        p.totbursts=0;
 
         int value;
         while (iss >> value) {
@@ -74,12 +76,15 @@ vector<Process> parseProcesses(const string &filename) {
             } else {
                 Burst burst;
                 burst.duration = value;
+                
                 if (!(iss >> value) || value == -1) {
                     burst.ioDuration = 0;
                 } else {
                     burst.ioDuration = value;
                 }
                 p.bursts.push_back(burst);
+                p.totbursts+=burst.ioDuration+burst.duration;
+                
             }
         }
         processes.push_back(p);
@@ -127,16 +132,16 @@ void calculateAndDisplayMetrics(const vector<Process> &processes) {
     int minarr=0;
 
     for (const auto &p : processes) {
-        int burstTotal = accumulate(p.bursts.begin(), p.bursts.end(), 0,
-            [](int sum, const Burst &b) { return sum + b.duration; });
-        totalWaitingTime += p.waitTime;
+        int burstTotal = p.totbursts;
+        int waitingTime = p.completionTime - p.arrivalTime - burstTotal;
+        totalWaitingTime += waitingTime;
         totalCompletionTime += p.completionTime - p.arrivalTime;
-        maxWaitingTime = max(maxWaitingTime, p.waitTime);
+        maxWaitingTime = max(maxWaitingTime, waitingTime);
         maxCompletionTime = max(maxCompletionTime, p.completionTime - p.arrivalTime);
         maxexit=max(maxexit,p.completionTime);
         minarr=min(minarr,p.arrivalTime);
     }
-
+    cout<<totalWaitingTime<<endl;
     int makespan = maxexit-minarr;
     double avgCompletionTime = static_cast<double>(totalCompletionTime) / processes.size();
     double avgWaitingTime = static_cast<double>(totalWaitingTime) / processes.size();
@@ -144,8 +149,7 @@ void calculateAndDisplayMetrics(const vector<Process> &processes) {
     // Output metrics
     cout << "********* METRICS *********" << endl;
     for (const auto &p : processes) {
-        int burstTotal = accumulate(p.bursts.begin(), p.bursts.end(), 0,
-            [](int sum, const Burst &b) { return sum + b.duration; });
+        int burstTotal = p.totbursts;
         cout << "P" << p.id+1 << " Arrival Time: " << p.arrivalTime
              << " Exit Time: " << p.completionTime
              << " Waiting Time: " << p.waitTime << endl;
@@ -556,6 +560,7 @@ void rrsched(const char* filename){
             if (burst == -1)
                 break;
             processes[i].bursts.push_back(burst);
+            processes[i].totbursts+=burst;
         }
 
         processes[i].currentBurstIndex = 0;
@@ -624,14 +629,7 @@ void rrsched(const char* filename){
                     cout << "P" << p.processID + 1 << ","<<cpburind
                                     <<"\t"<< currentTime << "\t" << currentTime+ timeToExecute-1<< endl;
                         
-                    // Increment waiting time for all other ready processes
-                    for (int i = 0; i < nop; ++i)
-                    {
-                        if (i != currentProcessID && processes[i].inReadyQueue )
-                        {
-                            processes[i].waitingTime += timeToExecute;
-                        }
-                    }
+
 
                     // Update current burst and time
                     p.bursts[p.currentBurstIndex] -= timeToExecute;
@@ -725,13 +723,15 @@ void rrsched(const char* filename){
     cout << "********* METRICS *********" << endl;
     for (int i = 0; i < nop; ++i)
     {
-        maxwaittime = max(maxwaittime,processes[i].waitingTime);
+        
+        int waitingTime=processes[i].turnaroundTime-processes[i].totbursts;
+        maxwaittime = max(maxwaittime,waitingTime);
         maxcomplettime = max(maxcomplettime, processes[i].turnaroundTime);
         maxmkspt=max(maxmkspt,processes[i].comptime);
         minmkspt=min(minmkspt,processes[i].arrivalTime);
-        averageWaitingTime += processes[i].waitingTime;
+        averageWaitingTime += waitingTime;
         averageTurnaroundTime += processes[i].turnaroundTime;
-        cout<<"P"<<i+1<<" Arrival time: "<<processes[i].arrivalTime<<" Exit time: "<<processes[i].comptime<<" Waiting time: "<<processes[i].waitingTime<<endl;
+        cout<<"P"<<i+1<<" Arrival time: "<<processes[i].arrivalTime<<" Exit time: "<<processes[i].comptime<<" Waiting time: "<<waitingTime<<endl;
 
     }
     int makspan=maxmkspt-minmkspt;
