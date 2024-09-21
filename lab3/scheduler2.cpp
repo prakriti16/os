@@ -5,24 +5,24 @@ using namespace std;
 struct Burst {
     int duration;
     int ioDuration;
+     bool isIO;
 };
 
 struct Process {
     int arrivalTime;
     vector<Burst> bursts;
     int remainingTime;
+    int totbursts;
     int completionTime;
     int lastIOEndTime;
     int currentBurstIndex;
     bool inIO;
-    int totbursts;
     bool completed;
     int id; // To keep track of process IDs
+    bool isRunning;
+    int cpuAssigned; 
+    bool isIO;
 };
-
-
-
-
 struct ProcessRR
 {
     int processID;
@@ -58,12 +58,12 @@ vector<Process> parseProcesses(const string &filename) {
         p.id = id++;
         p.arrivalTime = -1;
         p.remainingTime = 0;
+        p.totbursts=0;
         p.completionTime = 0;
         p.lastIOEndTime = 0;
         p.currentBurstIndex = 0;
         p.inIO = false;
         p.completed = false;
-        p.totbursts=0;
 
         int value;
         while (iss >> value) {
@@ -125,7 +125,7 @@ void calculateAndDisplayMetrics(const vector<Process> &processes) {
     int minarr=0;
 
     for (const auto &p : processes) {
-        int burstTotal =  p.totbursts;
+        int burstTotal = p.totbursts;
         int waitingTime = p.completionTime - p.arrivalTime - burstTotal;
         totalWaitingTime += waitingTime;
         totalCompletionTime += p.completionTime - p.arrivalTime;
@@ -142,10 +142,10 @@ void calculateAndDisplayMetrics(const vector<Process> &processes) {
     // Output metrics
     cout << "********* METRICS *********" << endl;
     for (const auto &p : processes) {
-        int burstTotal =  p.totbursts;
+        int burstTotal = p.totbursts;
         cout << "P" << p.id+1 << " Arrival Time: " << p.arrivalTime
              << " Exit Time: " << p.completionTime
-             << " Waiting Time: " << p.completionTime - p.arrivalTime - p.totbursts<< endl;
+             << " Waiting Time: " <<  p.completionTime - p.arrivalTime - p.totbursts<< endl;
     }
     cout << "-----------------" << endl;
     cout << "Make Span: " << makespan << endl;
@@ -362,7 +362,6 @@ void sjfwith2Processor(vector<Process> &processes) {
 
             schedule.emplace_back(p->id + 1, p->currentBurstIndex + 1, burstStart, burstEnd, currentCPU);
             
-
             // Update current time after executing the CPU burst
             currentTime = burstEnd;
 
@@ -407,18 +406,25 @@ void sjfwith2Processor(vector<Process> &processes) {
                  << "\t End: " << get<3>(entry) - 1 << endl;
         }
     }
-
     // Calculate and display metrics (waiting time, turnaround time, etc.)
     calculateAndDisplayMetrics(processes);
 }
 
-
+void printSchedule(const vector<tuple<int, int, int, int>> &schedule) {
+    for (const auto &entry : schedule) {
+        int processID = get<0>(entry);
+        int burstIndex = get<1>(entry);
+        int startTime = get<2>(entry);
+        int endTime = get<3>(entry);
+        cout << "P" << processID << "," << burstIndex << "\t" << startTime << "\t" << endTime - 1 << endl;
+    }
+}
 void psjfSchedulerTwoProcessors(vector<Process> &processes) {
     priority_queue<Process*, vector<Process*>, SJFComparator> readyQueue;  // Min-heap priority queue for CPU-ready processes
     queue<Process*> waitQueue;  // Queue for processes in I/O
     vector<tuple<int, int, int, int, int>> schedule;  // (ProcessID, current burst, Start Time, End Time, CPU ID)
     int currentTimeCPU0 = 0, currentTimeCPU1 = 0;  // Track current time for both CPUs
-
+Process* prevp=nullptr;
     // Copy and sort processes by arrival time
     vector<Process*> processPtrs;
     for (auto &p : processes) {
@@ -478,19 +484,43 @@ void psjfSchedulerTwoProcessors(vector<Process> &processes) {
             }
             continue;
         }
-
         // Assign process to the CPU that's available first (either CPU 0 or CPU 1)
         int currentCPU = (currentTimeCPU0 <= currentTimeCPU1) ? 0 : 1;
         int &currentTime = (currentCPU == 0) ? currentTimeCPU0 : currentTimeCPU1;
+       Process* p;
+        Process* pr;
 
-        // Pick the process with the shortest remaining time
-        Process* p = readyQueue.top();
+if(currentCPU==1)
+{
+
+        pr = readyQueue.top();
+        if(pr!=prevp)
+        {
+            p=pr;
+            readyQueue.pop();
+        }
+        else{
+    readyQueue.pop();
+    if(readyQueue.empty())
+    {
+        readyQueue.push(pr);
+        currentTimeCPU1++;
+        continue;
+    }
+    else{
+          p = readyQueue.top();
         readyQueue.pop();
-
+        readyQueue.push(pr);
+    }
+}
+}
+      else{  // for cpu0
+         p = readyQueue.top();
+        readyQueue.pop();
+      }
         if (p->arrivalTime > currentTime) {
             currentTime = p->arrivalTime;
         }
-
         if (p->currentBurstIndex < p->bursts.size()) {
             Burst &burst = p->bursts[p->currentBurstIndex];
             int burstStart = currentTime;
@@ -503,10 +533,12 @@ void psjfSchedulerTwoProcessors(vector<Process> &processes) {
             currentTime = burstEnd;
             p->remainingTime -= timeToExecute;
             burst.duration -= timeToExecute;  // Reduce the burst duration by the time executed
-
-
             // If the burst is not yet completed, push the process back into the ready queue
             if (burst.duration > 0) {
+                   if(currentCPU==0)
+                    {
+                        prevp=p;
+                    }
                 readyQueue.push(p);  
             } else {
                 // If the process has more bursts (I/O or CPU)
@@ -559,18 +591,15 @@ void psjfSchedulerTwoProcessors(vector<Process> &processes) {
 
         // Print the consolidated schedule
         for (const auto &entry : consolidatedSchedule) {
-            cout << "P" << get<0>(entry) << "," << get<1>(entry)
-                 << "\t Start: " << get<2>(entry)
-                 << "\t End: " << get<3>(entry) - 1 << endl;
+            cout << "P" << get<0>(entry) << ", " << get<1>(entry)
+                 << ", " << get<2>(entry)
+                 << ", " << get<3>(entry)-1 << endl;
         }
     }
 
     // Calculate and display metrics (waiting time, turnaround time, etc.)
     calculateAndDisplayMetrics(processes);
 }
-
-
-
 
 int main(int argc, char *argv[]) {
     clock_t start, end;
