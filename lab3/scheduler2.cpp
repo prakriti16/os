@@ -22,18 +22,22 @@ struct Process {
     bool isRunning;
     int cpuAssigned; 
     bool isIO;
+    int waitTime;
+
 };
 struct ProcessRR
 {
     int processID;
     int arrivalTime;
     vector<int> bursts; // Alternating CPU and I/O bursts
+    int totbursts = 0;
     int turnaroundTime = 0;
     int currentBurstIndex = 0; // Tracks the current burst (either CPU or I/O)
     int ioEndTime = 0;         // When I/O will complete
     bool isComplete = false;   // To check if the process has finished
     bool inReadyQueue, inIOQueue,inpartialQueue;
     int comptime=-1;//completion time
+    int cpuAssigned; 
 };
 vector<Process> parseProcesses(const string &filename) {
     ifstream file(filename);
@@ -601,6 +605,185 @@ if(currentCPU==1)
     calculateAndDisplayMetrics(processes);
 }
 
+void rrSchedulerTwoProcessors(vector<Process> &processes,int timequantum) {
+    deque<Process*> readyQueue;  // Min-heap priority queue for CPU-ready processes
+    queue<Process*> waitQueue;  // Queue for processes in I/O
+    vector<tuple<int, int, int, int, int>> schedule;  // (ProcessID, current burst, Start Time, End Time, CPU ID)
+    int currentTimeCPU0 = 0, currentTimeCPU1 = 0;  // Track current time for both CPUs
+Process* prevp=nullptr;
+Process* partialp=NULL;
+    // Copy and sort processes by arrival time
+    vector<Process*> processPtrs;
+    for (auto &p : processes) {
+        processPtrs.push_back(&p);
+    }
+    sort(processPtrs.begin(), processPtrs.end(), [](Process *a, Process *b) {
+        return a->arrivalTime < b->arrivalTime;
+    });
+
+    // Initialize remaining time for all processes
+    for (auto &p : processes) {
+        p.remainingTime = accumulate(p.bursts.begin(), p.bursts.end(), 0,
+                                     [](int sum, const Burst &b) { return sum + b.duration; });
+        p.currentBurstIndex = 0;  // Reset current burst index
+    }
+
+    // Add the first process that arrives at time 0 or earliest time to the ready queue
+    if (!processPtrs.empty() && processPtrs[0]->arrivalTime <= min(currentTimeCPU0, currentTimeCPU1)) {
+        readyQueue.push_back(processPtrs[0]);
+        processPtrs.erase(processPtrs.begin());
+    }
+
+    while (!readyQueue.empty() || !waitQueue.empty() || !processPtrs.empty()) {
+        // Check for processes that completed their I/O and move them back to the ready queue
+        sortQueueByLastIOEndTime(waitQueue);
+        while (!waitQueue.empty() && waitQueue.front()->lastIOEndTime <= min(currentTimeCPU0, currentTimeCPU1)) {
+            Process* p = waitQueue.front();
+            waitQueue.pop();
+            p->inIO = false;  // Mark as no longer in I/O
+
+            readyQueue.push_back(p);  // Now ready for CPU
+
+        }
+        // Check for new processes that have arrived and add them to the ready queue
+        while (!processPtrs.empty() && processPtrs.front()->arrivalTime <= min(currentTimeCPU0, currentTimeCPU1)) {
+            readyQueue.push_back(processPtrs.front());
+
+            processPtrs.erase(processPtrs.begin());
+        }
+if(partialp)
+{
+    readyQueue.push_back(partialp);
+    partialp=nullptr;
+}
+        if (readyQueue.empty()) {
+            // If no processes are in the ready queue, advance time to the next I/O completion or process arrival
+            int nextEventTime = INT_MAX;
+
+            // Find the nearest I/O completion time
+            if (!waitQueue.empty()) {
+                nextEventTime = waitQueue.front()->lastIOEndTime;
+            }
+
+            // Find the nearest process arrival time
+            if (!processPtrs.empty()) {
+                nextEventTime = min(nextEventTime, processPtrs.front()->arrivalTime);
+            }
+
+            // Advance both CPU times to the next event
+            if (nextEventTime != INT_MAX) {
+                currentTimeCPU0 = max(currentTimeCPU0, nextEventTime);
+                currentTimeCPU1 = max(currentTimeCPU1, nextEventTime);
+            }
+            continue;
+        }
+        // Assign process to the CPU that's available first (either CPU 0 or CPU 1)
+        int currentCPU = (currentTimeCPU0 <= currentTimeCPU1) ? 0 : 1;
+        int &currentTime = (currentCPU == 0) ? currentTimeCPU0 : currentTimeCPU1;
+       Process* p;
+        Process* pr;
+
+if(currentCPU==1)
+{
+
+        pr = readyQueue.front();
+        if(pr!=prevp)
+        {
+            p=pr;
+            readyQueue.pop_front();
+        }
+        else{
+    readyQueue.pop_front();
+    if(readyQueue.empty())
+    {
+        readyQueue.push_back(pr);
+        currentTimeCPU1++;
+        continue;
+    }
+    else{
+          p = readyQueue.front();
+        readyQueue.pop_front();
+        readyQueue.push_front(pr);
+    }
+}
+}
+      else{  // for cpu0
+         p = readyQueue.front();
+        readyQueue.pop_front();
+      }
+        if (p->arrivalTime > currentTime) {
+            currentTime = p->arrivalTime;
+        }
+        if (p->currentBurstIndex < p->bursts.size()) {
+            Burst &burst = p->bursts[p->currentBurstIndex];
+            int burstStart = currentTime;
+            int timeToExecute = min(timequantum, burst.duration);  // Execute for only timequantum second 
+            int burstEnd = burstStart + timeToExecute;
+
+            schedule.emplace_back(p->id + 1, p->currentBurstIndex + 1, burstStart, burstEnd, currentCPU);
+
+            // Update current time after executing for timequantum second
+            currentTime = burstEnd;
+            p->remainingTime -= timeToExecute;
+            burst.duration -= timeToExecute;  // Reduce the burst duration by the time executed
+            // If the burst is not yet completed, push the process back into the ready queue
+            if (burst.duration > 0) {
+                   if(currentCPU==0)
+                    {
+                        prevp=p;
+                    }
+                            // Check for new processes that have arrived and add them to the ready queue
+        // Check for new processes that have arrived and add them to the ready queue
+        while (!processPtrs.empty() && processPtrs.front()->arrivalTime <= currentTime) {
+            readyQueue.push_back(processPtrs.front());
+
+            processPtrs.erase(processPtrs.begin());
+        }
+
+partialp=p;
+
+            } else {
+                // If the process has more bursts (I/O or CPU)
+                if (p->currentBurstIndex < p->bursts.size()) {
+                    Burst &nextBurst = p->bursts[p->currentBurstIndex];
+                    p->lastIOEndTime = currentTime + nextBurst.ioDuration;  // Calculate the I/O end time
+                    p->inIO = true;  // Mark as in I/O
+                    waitQueue.push(p); 
+                    p->currentBurstIndex++;
+                    // Mark as completed
+                    p->completionTime = currentTime;
+                    p->completed = true;
+                }
+
+            }
+
+        }
+
+    }
+
+       // Output the schedule separately for CPU 0 and CPU 1
+    cout << "********* CPU 0 Schedule *********" << endl;
+    for (const auto &entry : schedule) {
+        if (get<4>(entry) == 0) {
+            cout << "P" << get<0>(entry) << ", " << get<1>(entry)
+                 << ",  " << get<2>(entry)
+                 << ", " << get<3>(entry) - 1 << endl;
+        }
+    }
+
+    cout << "********* CPU 1 Schedule *********" << endl;
+    for (const auto &entry : schedule) {
+        if (get<4>(entry) == 1) {
+            cout << "P" << get<0>(entry) << ", " << get<1>(entry)
+                 << ", " << get<2>(entry)
+                 << ", " << get<3>(entry) - 1 << endl;
+        }
+    }
+
+    // Calculate and display metrics
+    calculateAndDisplayMetrics(processes);
+}
+
 int main(int argc, char *argv[]) {
     clock_t start, end;
     start = clock(); 
@@ -636,6 +819,14 @@ int main(int argc, char *argv[]) {
             return 1;
         }
         psjfSchedulerTwoProcessors(processes);
+    }
+      else  if (algorithm == "RR") {
+        vector<Process> processes = parseProcesses(filename);
+        if (processes.empty()) {
+            cerr << "No processes to schedule." << endl;
+            return 1;
+        }
+        rrSchedulerTwoProcessors(processes,10);
     }
 
 else {
