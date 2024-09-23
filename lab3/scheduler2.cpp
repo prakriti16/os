@@ -138,7 +138,6 @@ void calculateAndDisplayMetrics(const vector<Process> &processes) {
         maxexit=max(maxexit,p.completionTime);
         minarr=min(minarr,p.arrivalTime);
     }
-
     int makespan = maxexit-minarr;
     double avgCompletionTime = static_cast<double>(totalCompletionTime) / processes.size();
     double avgWaitingTime = static_cast<double>(totalWaitingTime) / processes.size();
@@ -651,11 +650,7 @@ Process* partialp=NULL;
 
             processPtrs.erase(processPtrs.begin());
         }
-if(partialp)
-{
-    readyQueue.push_back(partialp);
-    partialp=nullptr;
-}
+
         if (readyQueue.empty()) {
             // If no processes are in the ready queue, advance time to the next I/O completion or process arrival
             int nextEventTime = INT_MAX;
@@ -732,15 +727,9 @@ if(currentCPU==1)
                     {
                         prevp=p;
                     }
-                            // Check for new processes that have arrived and add them to the ready queue
-        // Check for new processes that have arrived and add them to the ready queue
-        while (!processPtrs.empty() && processPtrs.front()->arrivalTime <= currentTime) {
-            readyQueue.push_back(processPtrs.front());
+                readyQueue.push_back(p);
 
-            processPtrs.erase(processPtrs.begin());
-        }
 
-partialp=p;
 
             } else {
                 // If the process has more bursts (I/O or CPU)
@@ -761,22 +750,22 @@ partialp=p;
 
     }
 
-       // Output the schedule separately for CPU 0 and CPU 1
+    // Output the schedule separately for CPU 0 and CPU 1
     cout << "********* CPU 0 Schedule *********" << endl;
     for (const auto &entry : schedule) {
         if (get<4>(entry) == 0) {
-            cout << "P" << get<0>(entry) << ", " << get<1>(entry)
-                 << ",  " << get<2>(entry)
-                 << ", " << get<3>(entry) - 1 << endl;
+            cout << "P" << get<0>(entry) << "," << get<1>(entry)
+                 << "\t Start: " << get<2>(entry)
+                 << "\t End: " << get<3>(entry) - 1 << endl;
         }
     }
 
     cout << "********* CPU 1 Schedule *********" << endl;
     for (const auto &entry : schedule) {
         if (get<4>(entry) == 1) {
-            cout << "P" << get<0>(entry) << ", " << get<1>(entry)
-                 << ", " << get<2>(entry)
-                 << ", " << get<3>(entry) - 1 << endl;
+            cout << "P" << get<0>(entry) << "," << get<1>(entry)
+                 << "\t Start: " << get<2>(entry)
+                 << "\t End: " << get<3>(entry) - 1 << endl;
         }
     }
 
