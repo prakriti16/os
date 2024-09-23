@@ -607,11 +607,7 @@ void rrScheduler(vector<Process> &processes,int timequantum) {
             readyQueue=temp;
             // If the burst is not yet completed, push the process back into the ready queue
             if (burst.duration > 0) {
-                        // Check for new processes that have arrived and add them to the ready queue
-        while (!processPtrs.empty() && processPtrs.front()->arrivalTime <= currentTime) {
-            readyQueue.push(processPtrs.front());
-            processPtrs.erase(processPtrs.begin());
-        }
+
                 // Re-insert the process into the ready queue with updated remaining time
                 readyQueue.push(p);  
             } else {
