@@ -237,7 +237,7 @@ void s3(int pipefd[2], struct image_t* input_image, char* output_part2_1) {
         struct image_t* sharpened_image = S3_sharpen(input_image, details_image);
         free_image(details_image);
         // If it's the last iteration, write the sharpened image
-        if (i==88) {
+        if (i==999) {
             write_ppm_file(output_part2_1, sharpened_image);
         }
         free_image(sharpened_image);
