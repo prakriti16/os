@@ -247,14 +247,6 @@ void s3(int pipefd[2], struct image_t* input_image, char* output_part2_1) {
     exit(0);
 }
 
-
-bool hashcheck(struct image_t* sent_image, struct image_t* received_image){
-    if(generatehash(sent_image)==generatehash(received_image)){
-        return true;
-    }
-    return false;
-}
-
 int main(int argc, char **argv) {
     if (argc != 3) {
         std::cerr << "usage: ./a.out <input_image_path> <output_image_path>" << std::endl;
