@@ -178,6 +178,7 @@ struct image_t* deserialize_image(int pipe_fd) {
 }
 
 void s1(int pipefd[2], struct image_t* input_image) {
+    auto s1 = high_resolution_clock::now();
     close(pipefd[0]); // Close the read end of the pipe
     
     for (int i = 0; i < 1000; i++) {
@@ -192,10 +193,14 @@ void s1(int pipefd[2], struct image_t* input_image) {
         free_image(smoothened_image);
     }
     close(pipefd[1]); // Close the write end when done
+    auto e1 = high_resolution_clock::now();
+    double t1 = duration_cast<duration<double>>(e1-s1).count();
+    cout << "s1: " << t1 << " seconds" << endl;
     exit(0);
 }
 
 void s2(int pipefd1[2], int pipefd2[2], struct image_t* input_image) {
+    auto s2 = high_resolution_clock::now();
     close(pipefd1[1]); // Close write end of first pipe
     close(pipefd2[0]); // Close read end of second pipe
 
@@ -220,10 +225,14 @@ void s2(int pipefd1[2], int pipefd2[2], struct image_t* input_image) {
 
     close(pipefd2[1]); // Close the write end when done
     close(pipefd1[0]);
+    auto e2 = high_resolution_clock::now();
+    double t2 = duration_cast<duration<double>>(e2-s2).count();
+    cout << "s2: " << t2 << " seconds" << endl;
     exit(0);
 }
 
 void s3(int pipefd[2], struct image_t* input_image, char* output_part2_1) {
+    auto s3 = high_resolution_clock::now();
     close(pipefd[1]); // Close the write end of the pipe
 
     for (int i=0; i<1000; i++) {
@@ -244,12 +253,15 @@ void s3(int pipefd[2], struct image_t* input_image, char* output_part2_1) {
     }
 
     close(pipefd[0]);
+    auto e3 = high_resolution_clock::now();
+    double t3 = duration_cast<duration<double>>(e3-s3).count();
+    cout << "s3: " << t3 << " seconds" << endl;
     exit(0);
 }
 
 int main(int argc, char **argv) {
     if (argc != 3) {
-        std::cerr << "usage: ./a.out <input_image_path> <output_image_path>" << std::endl;
+        cerr << "usage: ./a.out <input_image_path> <output_image_path>" << std::endl;
         return 1;
     }
 
@@ -262,7 +274,7 @@ int main(int argc, char **argv) {
     int pipefd1[2], pipefd2[2];
 
     if (pipe(pipefd1) == -1 || pipe(pipefd2) == -1) {
-        std::cerr << "Pipe creation failed" << std::endl;
+        cerr << "Pipe creation failed" << std::endl;
         return 1;
     }
 
@@ -295,7 +307,7 @@ int main(int argc, char **argv) {
     }
     auto end = high_resolution_clock::now();
     double elapsed = duration_cast<duration<double>>(end-start).count();
-    std::cout << "Processing time: " << elapsed << " seconds" << std::endl;
+    cout << "Processing time: " << elapsed << " seconds" << std::endl;
 
     free_image(input_image);
     return 0;
