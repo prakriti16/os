@@ -72,15 +72,13 @@ void run_parallel(struct image_t* input_image, const char* output_filename) {
     pid_t pid_s1 = fork();
     if (pid_s1 == 0) { //s1 process
         struct image_t *shm_s1 = (struct image_t*)shmat(shmid1, NULL, 0); //attaches shared mem shm1 to curr process'(s1) address space
-        for (int i = 0; i < 10; ++i) {  // reduced to 10 iterations for testing
-            cout << "S1: Iteration " << i << endl; // Debug output
-            struct image_t* smooth_img = S1_smoothen(input_image);  // Process smoothening
+        for (int i = 0; i < 1000; ++i) { 
+            struct image_t* smooth_img = S1_smoothen(input_image); 
             memcpy(shm_s1, smooth_img, sizeof(struct image_t)); // Copy result to shared memory
             sem_signal(0);  //signals s2 , semaphore assoc with sem_num 0 is ++
             delete smooth_img; // Free the temporary smoothened image
         }
         shmdt(shm_s1);
-        cout << "S1: Finished\n"; // Debug output
         exit(0);
     }
 
@@ -88,17 +86,15 @@ void run_parallel(struct image_t* input_image, const char* output_filename) {
     if (pid_s2 == 0) { //process s2
         struct image_t *shm_s1 = (struct image_t*)shmat(shmid1, NULL, 0); //attaches shared mem sh1 (for s2 to access it)
         struct image_t *shm_s2 = (struct image_t*)shmat(shmid2, NULL, 0); // attaches shared mem sh2 to s2's add space(for s2 to write in it)
-        for (int i = 0; i < 10; ++i) { // reduced to 10 iterations for testing
+        for (int i = 0; i < 1000; ++i) { 
             sem_wait(0);  //waits for s1 to finish
-            cout << "S2: Iteration " << i << endl; // Debug output
-            struct image_t* details_img = S2_find_details(input_image, shm_s1); // Find details
+            struct image_t* details_img = S2_find_details(input_image, shm_s1);
             memcpy(shm_s2, details_img, sizeof(struct image_t)); // Copy result to shared memory
             sem_signal(1);  
             delete details_img; // Free the temporary details image
         }
         shmdt(shm_s1); //detach shm1 & 2
         shmdt(shm_s2);
-        cout << "S2: Finished\n"; // Debug output
         exit(0);
     }
 
@@ -106,28 +102,23 @@ void run_parallel(struct image_t* input_image, const char* output_filename) {
     if (pid_s3 == 0) {
         struct image_t *shm_s2 = (struct image_t*)shmat(shmid2, NULL, 0);
         struct image_t *sharpened_image = nullptr;
-        for (int i = 0; i < 10; ++i) { // reduced to 10 iterations for testing
+        for (int i = 0; i < 1000; ++i) { 
             sem_wait(1); // wait for s2 to finish
-            cout << "S3: Iteration " << i << endl; // Debug output
-            sharpened_image = S3_sharpen(input_image, shm_s2); // Sharpen the image
+            sharpened_image = S3_sharpen(input_image, shm_s2);
         }
-        write_ppm_file((char*)output_filename, sharpened_image); // Write output
+        write_ppm_file((char*)output_filename, sharpened_image); 
         delete sharpened_image; // Free the sharpened image
-        cout << "S3: Finished\n"; // Debug output
         exit(0);
     }
-    
-    // Parent process waits for child processes
+
     wait(NULL);
     wait(NULL);
     wait(NULL);
 
-    // Cleanup IPC
-    shmctl(shmid1, IPC_RMID, NULL); // Clean up shared memory
+    shmctl(shmid1, IPC_RMID, NULL); 
     shmctl(shmid2, IPC_RMID, NULL);
-    semctl(semid, 0, IPC_RMID, NULL); // Clean up semaphores
+    semctl(semid, 0, IPC_RMID, NULL);
 }
-
 
 int main(int argc, char **argv) {
     if (argc != 3) {
