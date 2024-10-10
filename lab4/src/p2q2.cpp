@@ -4,11 +4,13 @@
 #include <sys/sem.h>
 #include <unistd.h>
 #include <wait.h>
+#include <cstring>
 #include <cstdint>
 #include <chrono>
 #include "libppm.h"  //includes definition of `image_t`
 using namespace std;
 using namespace std::chrono;
+
 int shmid1, shmid2;
 int semid;
 
@@ -21,7 +23,6 @@ union semun {
 struct image_t* S1_smoothen(struct image_t *input_image);
 struct image_t* S2_find_details(struct image_t *input_image, struct image_t *smoothened_image);
 struct image_t* S3_sharpen(struct image_t *input_image, struct image_t *details_image);
-
 
 void setup_ipc() {
     shmid1 = shmget(IPC_PRIVATE, sizeof(struct image_t), IPC_CREAT | 0666); //s1 to s2 shared mem
@@ -71,11 +72,15 @@ void run_parallel(struct image_t* input_image, const char* output_filename) {
     pid_t pid_s1 = fork();
     if (pid_s1 == 0) { //s1 process
         struct image_t *shm_s1 = (struct image_t*)shmat(shmid1, NULL, 0); //attaches shared mem shm1 to curr process'(s1) address space
-        for (int i = 0; i < 1000; ++i) {
-            shm_s1 = S1_smoothen(input_image);
+        for (int i = 0; i < 10; ++i) {  // reduced to 10 iterations for testing
+            cout << "S1: Iteration " << i << endl; // Debug output
+            struct image_t* smooth_img = S1_smoothen(input_image);  // Process smoothening
+            memcpy(shm_s1, smooth_img, sizeof(struct image_t)); // Copy result to shared memory
             sem_signal(0);  //signals s2 , semaphore assoc with sem_num 0 is ++
+            delete smooth_img; // Free the temporary smoothened image
         }
         shmdt(shm_s1);
+        cout << "S1: Finished\n"; // Debug output
         exit(0);
     }
 
@@ -83,14 +88,17 @@ void run_parallel(struct image_t* input_image, const char* output_filename) {
     if (pid_s2 == 0) { //process s2
         struct image_t *shm_s1 = (struct image_t*)shmat(shmid1, NULL, 0); //attaches shared mem sh1 (for s2 to access it)
         struct image_t *shm_s2 = (struct image_t*)shmat(shmid2, NULL, 0); // attaches shared mem sh2 to s2's add space(for s2 to write in it)
-        for (int i = 0; i < 1000; ++i) {
+        for (int i = 0; i < 10; ++i) { // reduced to 10 iterations for testing
             sem_wait(0);  //waits for s1 to finish
-//checks cur val of semaphore for sem_num 0 : if val>0 , it -- ; if val o then -- becomes -ve, process is blocked, sleeps until sem_sigmal is reveiced
-            shm_s2 = S2_find_details(input_image, shm_s1);
+            cout << "S2: Iteration " << i << endl; // Debug output
+            struct image_t* details_img = S2_find_details(input_image, shm_s1); // Find details
+            memcpy(shm_s2, details_img, sizeof(struct image_t)); // Copy result to shared memory
             sem_signal(1);  
+            delete details_img; // Free the temporary details image
         }
         shmdt(shm_s1); //detach shm1 & 2
         shmdt(shm_s2);
+        cout << "S2: Finished\n"; // Debug output
         exit(0);
     }
 
@@ -98,21 +106,28 @@ void run_parallel(struct image_t* input_image, const char* output_filename) {
     if (pid_s3 == 0) {
         struct image_t *shm_s2 = (struct image_t*)shmat(shmid2, NULL, 0);
         struct image_t *sharpened_image = nullptr;
-        for (int i = 0; i < 1000; ++i) {
+        for (int i = 0; i < 10; ++i) { // reduced to 10 iterations for testing
             sem_wait(1); // wait for s2 to finish
-            sharpened_image = S3_sharpen(input_image, shm_s2);
+            cout << "S3: Iteration " << i << endl; // Debug output
+            sharpened_image = S3_sharpen(input_image, shm_s2); // Sharpen the image
         }
-       write_ppm_file((char*)output_filename, sharpened_image);
+        write_ppm_file((char*)output_filename, sharpened_image); // Write output
+        delete sharpened_image; // Free the sharpened image
+        cout << "S3: Finished\n"; // Debug output
         exit(0);
     }
+    
+    // Parent process waits for child processes
     wait(NULL);
     wait(NULL);
     wait(NULL);
 
-    shmctl(shmid1, IPC_RMID, NULL);
+    // Cleanup IPC
+    shmctl(shmid1, IPC_RMID, NULL); // Clean up shared memory
     shmctl(shmid2, IPC_RMID, NULL);
-    semctl(semid, 0, IPC_RMID, NULL);
+    semctl(semid, 0, IPC_RMID, NULL); // Clean up semaphores
 }
+
 
 int main(int argc, char **argv) {
     if (argc != 3) {
