@@ -12,14 +12,14 @@ run-sharpen: ./a.out
 	g++ -g im1.cpp libppm.cpp -o im1.out
 
 part1: ./im1.out
-	./im1.out ../images/4.ppm output_part1.ppm
+	./im1.out ../images/1.ppm output_part1.ppm
 
 # Target to compile and run part2_1
 ./im2.out: im2.cpp libppm.cpp
 	g++ -g im2.cpp libppm.cpp -o im2.out
 
 part2_1: ./im2.out
-	./im2.out ../images/4.ppm output_part2_1.ppm
+	./im2.out ../images/1.ppm output_part2_1.ppm
 
 clean:
 	rm -f a.out
