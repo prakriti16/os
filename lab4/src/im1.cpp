@@ -143,16 +143,35 @@ int main(int argc, char **argv) {
         exit(0);
     }
     clock_t start, end;
+    clock_t s1,s2,s3,e1,e2,e3;
     start = clock(); 
     struct image_t *input_image = read_ppm_file(argv[1]);
     struct image_t *sharpened_image,*smoothened_image,*details_image;
     double s1_time,s2_time,s3_time;
     for(int i=0;i<1000;i++){
+        if(i==0){
+            s1=clock();
+        }
         smoothened_image = S1_smoothen(input_image);
+        if(i==999){
+            e1=clock();
+        }
         //print_memory_usage(smoothened_image);
+        if(i==0){
+            s2=clock();
+        }
         details_image = S2_find_details(input_image, smoothened_image);
+        if(i==999){
+            e2=clock();
+        }
         //print_memory_usage(details_image);
+        if(i==0){
+            s3=clock();
+        }
         sharpened_image = S3_sharpen(input_image, details_image);
+        if(i==999){
+            e3=clock();
+        }
         free_image(smoothened_image);
         free_image(details_image);
         if(i!=999){
@@ -162,7 +181,10 @@ int main(int argc, char **argv) {
     write_ppm_file(argv[2], sharpened_image);
     end = clock();
     double totruntime = double(end - start) / double(CLOCKS_PER_SEC);
-    cout<<"Total execution time (in seconds): "<<totruntime<<endl;
-    cout << "-----------------" << endl;
+    double s1t = double(e1 - s1) / double(CLOCKS_PER_SEC);
+    double s2t = double(e2 - s2) / double(CLOCKS_PER_SEC);
+    double s3t = double(e3 - s3) / double(CLOCKS_PER_SEC);
+    cout<<"time (in seconds)"<<endl<<"s1 :"<<s1t<<endl<<"s2 : "<<s2t<<endl<<"s3 :"<<s3t<<endl<<"Total execution time: "<<totruntime<<endl;
+    //cout << "-----------------" << endl;
     return 0;
 }
