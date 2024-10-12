@@ -11,5 +11,6 @@ struct image_t
 
 struct image_t* read_ppm_file(char* path_to_input_file);
 void write_ppm_file(char* path_to_output_file, struct image_t* image);
+void write2_ppm_file(char* path_to_output_file, struct image_t* image);
 
 #endif
