@@ -1,12 +1,13 @@
+
 #include <bits/stdc++.h> 
 #include <sys/ipc.h>
 #include <sys/shm.h>
 #include <sys/sem.h>
 #include <unistd.h>
-#include <sys/wait.h>
 #include <cstring>
 #include <cstdint>
 #include <chrono>
+#include <sys/wait.h>  // Include this header for wait function
 #include "libppm.h"  // Includes definition of `image_t`
 
 using namespace std;
@@ -114,22 +115,12 @@ void run_parallel(struct image_t* input_image, const char* output_filename) {
             perror("shmat");
             exit(1);
         }
-
-        struct image_t *sharpened_image = nullptr;
         for (int i = 0; i < 1000; ++i) { 
             sem_wait(1); // Wait for S2 to finish
-            sharpened_image = S3_sharpen(input_image, shm_s2);
+            struct image_t *sharpened_image = S3_sharpen(input_image, shm_s2);
+            write2_ppm_file((char*)output_filename, sharpened_image); 
             delete sharpened_image; // Free the sharpened image
         }
-        
-        // Write the final image after all iterations
-        sharpened_image = S3_sharpen(input_image, shm_s2);
-        int result = write2_ppm_file((char*)output_filename, sharpened_image); // Call write2_ppm_file instead of write_ppm_file
-        if (result != 0) {
-            perror("Error writing output file");
-        }
-        delete sharpened_image;  // Free the final sharpened image
-        
         shmdt(shm_s2);
         exit(0);
     }
@@ -219,7 +210,8 @@ struct image_t* S2_find_details(struct image_t *input_image, struct image_t *smo
             details_img->image_pixels[i][j] = new uint8_t[3];
 
             for (int k = 0; k < 3; k++) {
-                details_img->image_pixels[i][j][k] = abs(input_image->image_pixels[i][j][k] - smoothened_image->image_pixels[i][j][k]);
+                details_img->image_pixels[i][j][k] = 
+                abs(input_image->image_pixels[i][j][k] - smoothened_image->image_pixels[i][j][k]);
             }
         }
     }
@@ -241,7 +233,7 @@ struct image_t* S3_sharpen(struct image_t *input_image, struct image_t *details_
             sharpened_image->image_pixels[i][j] = new uint8_t[3];
 
             for (int k = 0; k < 3; k++) {
-                sharpened_image->image_pixels[i][j][k] = std::min(255, std::max(0, (int)input_image->image_pixels[i][j][k] + (int)details_image->image_pixels[i][j][k]));
+                sharpened_image->image_pixels[i][j][k] = min(255, max(0, (int)(input_image->image_pixels[i][j][k] + details_image->image_pixels[i][j][k])));
             }
         }
     }
