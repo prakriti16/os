@@ -142,3 +142,35 @@ void write_ppm_file(char * path_to_output_file, struct image_t* image)
 		exit(1);
 	}
 }
+
+void write2_ppm_file(char *path_to_output_file, struct image_t* image)
+{
+    ofstream write_stream(path_to_output_file, ios::binary | ios::out);
+    
+    if (!write_stream.is_open()) {
+        cerr << "Failed to open file " << path_to_output_file << "\n";
+        exit(1);
+    }
+    
+    write_stream.write("P6\n", 3);
+    
+    // Write width and height with a newline
+    std::string width_string = std::to_string(image->width);
+    std::string height_string = std::to_string(image->height);
+    write_stream.write(width_string.c_str(), width_string.length());
+    write_stream.write(" ", 1);
+    write_stream.write(height_string.c_str(), height_string.length());
+    write_stream.write("\n255\n", 5);
+    
+    // Write pixel data
+    for (int i = 0; i < image->height; i++) {
+        for (int j = 0; j < image->width; j++) {
+            for (int k = 0; k < 3; k++) {
+                write_stream.put(image->image_pixels[i][j][k]); // Assuming max value <= 255
+            }
+        }
+    }
+    
+    write_stream.close();
+}
+
