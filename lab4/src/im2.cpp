@@ -101,7 +101,7 @@ struct image_t* S2_find_details(struct image_t *input_image, struct image_t *smo
 struct image_t* S3_sharpen(struct image_t *input_image, struct image_t *details_image)
 {
 	// TODO
-		   int width = input_image->width;
+	int width = input_image->width;
     int height = input_image->height;
 
     struct image_t* sharpen_img = new image_t;
@@ -137,8 +137,8 @@ long long generatehash(struct image_t* image){
             {
                 //cout<<image->image_pixels[i][j][k]<<" ";
                 //sum++;
-                sum+=image->image_pixels[i][j][k];
-                //sum^=image->image_pixels[i][j][k];
+                //sum+=image->image_pixels[i][j][k];
+                sum^=image->image_pixels[i][j][k];
             }
             //cout<<endl;
         }
@@ -185,11 +185,8 @@ void s1(int pipefd[2], struct image_t* input_image) {
         struct image_t* smoothened_image = S1_smoothen(input_image);
         // Write the smoothened image to the pipe
         serialize_image(pipefd[1], smoothened_image);
-
-        //write(pipefd[1], smoothened_image, sizeof(*smoothened_image)); // Serialize this properly based on the image structure
-    
-        //cout<<endl;
-        //cout<<generatehash(smoothened_image)<<"ko "<<i<<endl;
+        cout<<"s1 generated hash for smoothened image for iteration  "<<i<<endl;
+        cout<<generatehash(smoothened_image)<<endl;
         free_image(smoothened_image);
     }
     close(pipefd[1]); // Close the write end when done
@@ -205,21 +202,15 @@ void s2(int pipefd1[2], int pipefd2[2], struct image_t* input_image) {
     close(pipefd2[0]); // Close read end of second pipe
 
     for (int i=0; i< 1000; i++) {
-        //struct image_t smoothened_image;
-
-        // Read the smoothened image from the pipe
         struct image_t* smoothened_image = deserialize_image(pipefd1[0]);
-        //read(pipefd1[0], &smoothened_image, sizeof(smoothened_image)); // Deserialize if needed
-        //cout<<endl<<"gof "<<i<<endl;
-        //cout<<generatehash(smoothened_image)<<endl;
+        cout<<"s2 generated hash for smoothened image for iteration  "<<i<<endl;
+        cout<<generatehash(smoothened_image)<<endl;
         struct image_t* details_image = S2_find_details(input_image, smoothened_image);
         free_image(smoothened_image);
 
-        // Write the details image to the second pipe
-        //write(pipefd2[1], details_image, sizeof(*details_image)); // Serialize this properly
-        serialize_image(pipefd2[1], details_image);
-        //cout<<endl;
-        //cout<<generatehash(details_image)<<"kot "<<i<<endl;
+         serialize_image(pipefd2[1], details_image);
+        cout<<"s2 generated hash for details image iteration "<<" "<<i<<endl;
+        cout<<generatehash(details_image)<<endl;
         free_image(details_image);
     }
 
@@ -236,16 +227,13 @@ void s3(int pipefd[2], struct image_t* input_image, char* output_part2_1) {
     close(pipefd[1]); // Close the write end of the pipe
 
     for (int i=0; i<1000; i++) {
-        //struct image_t details_image;
-
-        // Read the details image from the pipe
-        //read(pipefd[0], &details_image, sizeof(details_image)); // Deserialize properly
         struct image_t* details_image = deserialize_image(pipefd[0]);
-        //cout<<endl<<"goft"<<" "<<i<<endl;
-        //cout<<generatehash(details_image)<<endl;
+
+        cout<<"s3 generated hash for details image iteration "<<" "<<i<<endl;
+        cout<<generatehash(details_image)<<endl;
+
         struct image_t* sharpened_image = S3_sharpen(input_image, details_image);
         free_image(details_image);
-        // If it's the last iteration, write the sharpened image
         if (i==999) {
             write_ppm_file(output_part2_1, sharpened_image);
         }
