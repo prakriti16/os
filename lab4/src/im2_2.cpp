@@ -96,26 +96,6 @@ void cleanup_image_t(struct image_t* image)
     delete image;
 }
 
-
-long long generatehash(struct image_t* image){
-    long long sum=0;
-
-    for(int i=0;i<image->height;i++)
-	{
-		for(int j=0;j<image->width;j++)
-		{
-            for(int k=0;k<3;k++)
-            {
-                //cout<<image->image_pixels[i][j][k]<<" ";
-                //sum++;
-                sum+=image->image_pixels[i][j][k];
-                //sum^=image->image_pixels[i][j][k];
-            }
-            //cout<<endl;
-        }
-    }
-    return sum;
-}
 struct image_t* convert_arr_to_image_t(uint8_t* arr, int width, int height)
 {
     struct image_t* img = new image_t;
@@ -157,7 +137,25 @@ struct image_t* copy_image(struct image_t* original)
     }
     return img;
 }
+long long generatehash(struct image_t* image){
+    long long sum=0;
 
+    for(int i=0;i<image->height;i++)
+	{
+		for(int j=0;j<image->width;j++)
+		{
+            for(int k=0;k<3;k++)
+            {
+                //cout<<image->image_pixels[i][j][k]<<" ";
+                //sum++;
+                //sum+=image->image_pixels[i][j][k];
+                sum^=image->image_pixels[i][j][k];
+            }
+            //cout<<endl;
+        }
+    }
+    return sum;
+}
 void run_parallel(struct image_t* input_image, const char* output_filename)
 {
     // store dimensions
@@ -168,29 +166,29 @@ void run_parallel(struct image_t* input_image, const char* output_filename)
     pid_t pid_s1 = fork();
     if (pid_s1 == 0) // S1 process
 {
-    // cout << "Entered S1 Process" << endl; // Debug statement
     uint8_t* shm_s1 = (uint8_t*)shmat(shmid1, NULL, 0);
     if (shm_s1 == (uint8_t*)(-1))
     {
         perror("shmat");
         exit(1);
     }
-
+    auto s1 = high_resolution_clock::now();
     for (int i = 0; i < 1000; ++i)
     {
         struct image_t* smooth_img = S1_smoothen(input_image);
-        // cout << "S1 processing iteration: " << i << endl; // Debug statement
+
         for (int i = 0; i < height; i++)
             for (int j = 0; j < width; j++)
                 for (int k = 0; k < 3; k++)
                     shm_s1[i * width * 3 + j * 3 + k] = smooth_img->image_pixels[i][j][k];
-        
+        cout<<"S1 smooth image hash: "<<generatehash(smooth_img)<<" in iteration "<<i<<endl;
         cleanup_image_t(smooth_img);
         sem_signal(0);
         sem_wait(1);
     }
-
-    // cout << "Exiting S1 Process" << endl; // Debug statement
+    auto e1 = high_resolution_clock::now();
+    double t1 = duration_cast<duration<double>>(e1-s1).count();
+    cout << "s1: " << t1 << " seconds" << endl;
     shmdt(shm_s1);
     exit(0);
 }
@@ -199,7 +197,7 @@ void run_parallel(struct image_t* input_image, const char* output_filename)
     pid_t pid_s2 = fork();
     if (pid_s2 == 0) // S2 process
 {
-    // cout << "Entered S2 Process" << endl; // Debug statement
+    
     uint8_t* shm_s1 = (uint8_t*)shmat(shmid1, NULL, 0);
     uint8_t* shm_s2 = (uint8_t*)shmat(shmid2, NULL, 0);
     if (shm_s1 == (uint8_t*)(-1) || shm_s2 == (uint8_t*)(-1))
@@ -207,13 +205,14 @@ void run_parallel(struct image_t* input_image, const char* output_filename)
         perror("shmat");
         exit(1);
     }
-
+    auto s2 = high_resolution_clock::now();
     for (int i = 0; i < 1000; ++i)
     {
         sem_wait(0); // wait for S1 to finish
-        // cout << "S2 processing iteration: " << i << endl; // Debug statement
         struct image_t* smoothened_image = convert_arr_to_image_t(shm_s1, width, height);
         sem_signal(1);
+        cout<<"S2 smooth image hash: "<<generatehash(smoothened_image)<<" in iteration "<<i<<endl;
+
         struct image_t* details_img = S2_find_details(input_image, smoothened_image);
         cleanup_image_t(smoothened_image);
         
@@ -221,13 +220,14 @@ void run_parallel(struct image_t* input_image, const char* output_filename)
             for (int j = 0; j < width; j++)
                 for (int k = 0; k < 3; k++)
                     shm_s2[i * width * 3 + j * 3 + k] = details_img->image_pixels[i][j][k];
-        
+        cout<<"S2 details image hash: "<<generatehash(details_img)<<" in iteration "<<i<<endl;
         cleanup_image_t(details_img);
         sem_signal(2);
         sem_wait(3);
     }
-
-    // cout << "Exiting S2 Process" << endl; // Debug statement
+    auto e2 = high_resolution_clock::now();
+    double t2 = duration_cast<duration<double>>(e2-s2).count();
+    cout << "s2: " << t2 << " seconds" << endl;
     shmdt(shm_s1);
     shmdt(shm_s2);
     exit(0);
@@ -237,29 +237,32 @@ void run_parallel(struct image_t* input_image, const char* output_filename)
     pid_t pid_s3 = fork(); // S3 process
     if (pid_s3 == 0) // S3 process
 {
-    // cout << "Entered S3 Process" << endl; // Debug statement
     uint8_t* shm_s2 = (uint8_t*)shmat(shmid2, NULL, 0);
     if (shm_s2 == (uint8_t*)(-1))
     {
         perror("shmat");
         exit(1);
     }
-
+    auto s3 = high_resolution_clock::now();
     for (int i = 0; i < 1000; ++i)
     {
         sem_wait(2); // Wait for S2 to finish
-        // cout << "S3 processing iteration: " << i << endl; // Debug statement
         struct image_t* details_image = convert_arr_to_image_t(shm_s2, width, height);
-
         sem_signal(3);
+        cout<<"S3 details image hash: "<<generatehash(details_image)<<" in iteration "<<i<<endl;
         
         struct image_t* sharpened_image = S3_sharpen(input_image, details_image);
+        cout<<"S3 sharpened image hash: "<<generatehash(details_image)<<" in iteration "<<i<<endl;
         cleanup_image_t(details_image);
-        write2_ppm_file((char*)output_filename, sharpened_image);
+        if(i==999){
+            write_ppm_file((char*)output_filename, sharpened_image);
+        }
         cleanup_image_t(sharpened_image);
     }
+    auto e3 = high_resolution_clock::now();
+    double t3 = duration_cast<duration<double>>(e3-s3).count();
+    cout << "s3: " << t3 << " seconds" << endl;
 
-    // cout << "Exiting S3 Process" << endl; // Debug statement
     shmdt(shm_s2);
     exit(0);
 }
@@ -277,30 +280,30 @@ void run_parallel(struct image_t* input_image, const char* output_filename)
 
 int main(int argc, char** argv)
 {
+    cout << "Program started." << endl;
 
     if (argc != 3)
     {
         cout << "Usage: ./a.out <path-to-original-image> <path-to-transformed-image>\n";
         exit(0);
     }
-        // Start measuring time using chrono
-    auto start = high_resolution_clock::now();
 
     struct image_t* input_image = read_ppm_file(argv[1]);
-
+    auto start = high_resolution_clock::now();
     run_parallel(input_image, argv[2]);
     auto end = high_resolution_clock::now();
     double elapsed = duration_cast<duration<double>>(end-start).count();
-    std::cout << "Processing time: " << elapsed << " seconds" << std::endl;
-
-
+    cout << "Processing time: " << elapsed << " seconds" << endl;
 
     return 0;
 }
 
 // Function definitions
-struct image_t* S1_smoothen(struct image_t* input_image)
+struct image_t* S1_smoothen(struct image_t *input_image)
 {
+	// TODO
+
+	// remember to allocate space for smoothened_image. See read_ppm_file() in libppm.c for some help.
     int width = input_image->width;
     int height = input_image->height;
 
@@ -311,94 +314,87 @@ struct image_t* S1_smoothen(struct image_t* input_image)
 
     // Allocate 3D array for the image pixels
     smooth_img->image_pixels = new uint8_t**[height];
-    for (int i = 0; i < height; i++)
-    {
+    for (int i = 0; i < height; i++) {
         smooth_img->image_pixels[i] = new uint8_t*[width];
-        for (int j = 0; j < width; j++)
-        {
+        for (int j = 0; j < width; j++) {
             smooth_img->image_pixels[i][j] = new uint8_t[3];
 
             // Copy original image pixels to smooth_img
-            for (int k = 0; k < 3; k++)
-            {
+            for (int k = 0; k < 3; k++) {
                 smooth_img->image_pixels[i][j][k] = input_image->image_pixels[i][j][k];
             }
         }
     }
 
-    for (int i = 0; i < height; i++)
-    {
-        for (int j = 0; j < width; j++)
-        {
-            for (int k = 0; k < 3; k++)
-            {
-                for (int di = -1; di <= 1; di++)
-                {
-                    for (int dj = -1; dj <= 1; dj++)
-                    {
-                        if (i + di >= 0 && i + di < height && j + dj >= 0 && j + dj < width)
-                        {
-                            smooth_img->image_pixels[i][j][k] += input_image->image_pixels[i + di][j + dj][k];
-                        }
-                    }
-                }
-                smooth_img->image_pixels[i][j][k] /= 9;
-            }
-        }
-    }
-    return smooth_img;
+	for(int i=0;i<height;i++)
+	{
+		for(int j=0;j<width;j++)
+		{
+			if(i==0||j==0||i==height-1||j==width-1){
+				continue;
+			}
+			else{
+				for(int k=0;k<3;k++)
+				{
+					smooth_img->image_pixels[i][j][k]=(input_image->image_pixels[i-1][j][k]+input_image->image_pixels[i][j-1][k]+input_image->image_pixels[i-1][j-1][k]+input_image->image_pixels[i+1][j][k]+input_image->image_pixels[i][j+1][k]+input_image->image_pixels[i+1][j+1][k]+input_image->image_pixels[i-1][j+1][k]+input_image->image_pixels[i+1][j-1][k]+input_image->image_pixels[i][j][k])/9;
+				}
+			}
+		}
+	}
+	return smooth_img;
 }
 
-struct image_t* S2_find_details(struct image_t* input_image, struct image_t* smoothened_image)
+struct image_t* S2_find_details(struct image_t *input_image, struct image_t *smoothened_image)
 {
-    int width = input_image->width;
+	// TODO
+	int width = input_image->width;
     int height = input_image->height;
 
-    struct image_t* details_img = new image_t;
-    details_img->width = width;
-    details_img->height = height;
+    struct image_t* detail_img = new image_t;
+    detail_img->width = width;
+    detail_img->height = height;
 
-    details_img->image_pixels = new uint8_t**[height];
-    for (int i = 0; i < height; i++)
-    {
-        details_img->image_pixels[i] = new uint8_t*[width];
-        for (int j = 0; j < width; j++)
-        {
-            details_img->image_pixels[i][j] = new uint8_t[3];
+    detail_img->image_pixels = new uint8_t**[height];
+    for (int i = 0; i < height; i++) {
+        detail_img->image_pixels[i] = new uint8_t*[width];
+        for (int j = 0; j < width; j++) {
+            detail_img->image_pixels[i][j] = new uint8_t[3];
 
-            for (int k = 0; k < 3; k++)
-            {
-                details_img->image_pixels[i][j][k] =
-                    abs(input_image->image_pixels[i][j][k] - smoothened_image->image_pixels[i][j][k]);
+            for (int k = 0; k < 3; k++) {
+                detail_img->image_pixels[i][j][k] = abs(input_image->image_pixels[i][j][k]-smoothened_image->image_pixels[i][j][k]);
+
             }
         }
     }
-    return details_img;
+
+	return detail_img;
 }
 
-struct image_t* S3_sharpen(struct image_t* input_image, struct image_t* details_image)
+struct image_t* S3_sharpen(struct image_t *input_image, struct image_t *details_image)
 {
-    int width = input_image->width;
+	// TODO
+	int width = input_image->width;
     int height = input_image->height;
 
-    struct image_t* sharpened_image = new image_t;
-    sharpened_image->width = width;
-    sharpened_image->height = height;
+    struct image_t* sharpen_img = new image_t;
+    sharpen_img->width = width;
+    sharpen_img->height = height;
 
-    sharpened_image->image_pixels = new uint8_t**[height];
-    for (int i = 0; i < height; i++)
-    {
-        sharpened_image->image_pixels[i] = new uint8_t*[width];
-        for (int j = 0; j < width; j++)
-        {
-            sharpened_image->image_pixels[i][j] = new uint8_t[3];
+    sharpen_img->image_pixels = new uint8_t**[height];
+    for (int i = 0; i < height; i++) {
+        sharpen_img->image_pixels[i] = new uint8_t*[width];
+        for (int j = 0; j < width; j++) {
+            sharpen_img->image_pixels[i][j] = new uint8_t[3];
 
-            for (int k = 0; k < 3; k++)
-            {
-                sharpened_image->image_pixels[i][j][k] = min(
-                    255, max(0, (int)(input_image->image_pixels[i][j][k] + details_image->image_pixels[i][j][k])));
+            for (int k = 0; k < 3; k++) {
+                sharpen_img->image_pixels[i][j][k] =input_image->image_pixels[i][j][k]+details_image->image_pixels[i][j][k] ;
+				if(sharpen_img->image_pixels[i][j][k]>255){
+					sharpen_img->image_pixels[i][j][k]=255;
+				}
+
             }
         }
     }
-    return sharpened_image;
+
+	return sharpen_img; 
 }
