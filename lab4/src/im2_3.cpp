@@ -3,7 +3,7 @@
 #include <vector>
 #include <unistd.h>
 #include <atomic>
-#include "libppm.h" // Assumed to be your image processing library
+#include "libppm.h" 
 #include <chrono>
 
 using namespace std::chrono;
@@ -16,7 +16,6 @@ std::atomic<bool> s2_done(false);
 pthread_mutex_t mutex1 = PTHREAD_MUTEX_INITIALIZER;
 pthread_mutex_t mutex2 = PTHREAD_MUTEX_INITIALIZER;
 
-// Struct to pass data to threads
 struct thread_data {
     struct image_t* input_image;
     struct image_t* smoothened_image;
@@ -176,7 +175,7 @@ void* S1_smoothen_thread(void* arg) {
     pthread_exit(nullptr);
 }
 
-// Detail extraction function (S2)
+
 void* S2_find_details_thread(void* arg) {
 
     thread_data* data = (thread_data*)arg;
@@ -256,7 +255,7 @@ int main(int argc, char **argv) {
         free_image(data.details_image);
         if(i==999)
         {
-    // Write the final sharpened image to the output file
+    
     write_ppm_file(data.output_file, data.sharpened_image);
 
         }
