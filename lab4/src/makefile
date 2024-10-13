@@ -20,8 +20,14 @@ part1: ./im1.out
 
 part2_1: ./im2.out
 	./im2.out ../images/1.ppm output_part2_1.ppm
+# Target to compile and run part2_2
+./im2_2.out: im2_2.cpp libppm.cpp
+	g++ -g im2_2.cpp libppm.cpp -o im2_2.out
 
+part2_2: ./im2_2.out
+	./im2_2.out ../images/1.ppm output_part2_2.ppm
 clean:
 	rm -f a.out
 	rm -f im1.out
 	rm -f im2.out
+	rm -f im2_2.out
