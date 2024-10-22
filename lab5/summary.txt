@@ -1,0 +1,6 @@
+- use hashed page table
+- use c++ hashmap data structure dont need to implement it from scratch
+- if key DNE "PAGE FAULT". so:
+  - find a free frame (use some data structure to keep track of free frames) and add it to page table. 
+  - if no fee frame then use FIFO to kick out a frame. 
+  - increment pagefault counter.
