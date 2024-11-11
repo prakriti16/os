@@ -4,6 +4,7 @@ using namespace std;
 string replacementPolicy;
 string allocationPolicy;
 long long pagefaults=0;
+vector<long long> pagefaultvector={0,0,0,0};
 struct PageTableEntry {
     uint64_t pageIndex;
     bool valid;
@@ -125,7 +126,8 @@ void VirtualMemoryManager::accessMemory(int processId, uint64_t virtualAddress, 
         cout << "Page fault for Process ID: " << processId
              << ", Virtual Address: " << virtualAddress << endl;
         pagefaults++;
-        cout<<pagefaults;
+        pagefaultvector[processId]++;
+        // cout<<pagefaults;
 
         if (currentframe < maxFrames) {
             currentframe++;
@@ -202,9 +204,9 @@ public:
     void processTraceFile(const string &filePath);
     void accessMemory(int processId, uint64_t virtualAddress, uint64_t accessIndex, const vector<pair<int, uint64_t>>& futureAccesses);
     void removeEntry(int frameIndex);
-    void assignFrameToProcess(int processId, uint64_t pageIndex); // Declaration for assignFrameToProcess
+    void assignFrameToProcess(int processId, uint64_t pageIndex, uint64_t accessIndex,const vector<pair<int, uint64_t>>& futureAccesses); // Declaration for assignFrameToProcess
     bool isFrameFree(int frame); // Declaration for isFrameFree
-    int evictFrameFromRange(int processId); // Declaration for evictFrameFromRange
+    int evictFrameFromRange(int processId, uint64_t accessIndex,const vector<pair<int, uint64_t>>& futureAccesses); // Declaration for evictFrameFromRange
 
 
 private:
@@ -283,7 +285,7 @@ void VirtualMemoryManagerL::processTraceFile(const string &filePath) {
 }
 
 // Example frame assignment function inside your memory manager
-void VirtualMemoryManagerL::assignFrameToProcess(int processId, uint64_t pageIndex) {
+void VirtualMemoryManagerL::assignFrameToProcess(int processId, uint64_t pageIndex, uint64_t accessIndex,const vector<pair<int, uint64_t>>& futureAccesses) {
     bool frameAssigned = false;
     auto &frameRange = processFrameRange[processId];
 
@@ -308,7 +310,7 @@ void VirtualMemoryManagerL::assignFrameToProcess(int processId, uint64_t pageInd
 
     // If no free frame is found, evict a frame within the allocated range
     if (!frameAssigned) {
-        int evictedFrame = evictFrameFromRange(processId); // Eviction logic within range
+        int evictedFrame = evictFrameFromRange(processId, accessIndex, futureAccesses); // Eviction logic within range
         removeEntry(evictedFrame);
         processPageTables[processId].addEntry(pageIndex, evictedFrame);
         // PageTableEntry entry;
@@ -329,7 +331,7 @@ bool VirtualMemoryManagerL::isFrameFree(int frame) {
 }
 
 // Function to evict a frame within a process's allocated range
-int VirtualMemoryManagerL::evictFrameFromRange(int processId) {
+int VirtualMemoryManagerL::evictFrameFromRange(int processId, uint64_t accessIndex,const vector<pair<int, uint64_t>>& futureAccesses) {
     auto &frameRange = processFrameRange[processId];
     int evictedFrame = -1;
     if (replacementPolicy == "fifo") {
@@ -339,7 +341,6 @@ int VirtualMemoryManagerL::evictFrameFromRange(int processId) {
             evictedFrame = fifoQueue.front();
             fifoQueue.pop();
             if (evictedFrame >= frameRange.first && evictedFrame <= frameRange.second) {
-                
                 break;
             }
             else {
@@ -384,7 +385,39 @@ int VirtualMemoryManagerL::evictFrameFromRange(int processId) {
 
     }
     else if (replacementPolicy == "optimal") {
+        unordered_map<int, int> nextUse;
+        for (uint64_t i = accessIndex + 1; i < futureAccesses.size(); ++i) {
+            int futureProcessId = futureAccesses[i].first;
+            uint64_t futurePageIndex = futureAccesses[i].second / pageSize;
+            PageTableEntry entry;
+            if (processPageTables[futureProcessId].getEntry(futurePageIndex, entry) != -1) {
+                // Check if the current frame is already in the nextUse map
+                auto it = nextUse.find(entry.currentframe);
+                
+                // If the frame is not already in the map, update it 
+                if (it == nextUse.end() && entry.currentframe >= frameRange.first && entry.currentframe <= frameRange.second) {
+                    nextUse[entry.currentframe] = i;
+                }
+                //ensures that earliest access to frame is preserved
+                if(nextUse.size()==frameRange.second-frameRange.first){
+                    break;
+                }
+                //but there can be multiple frames so you have to check if size is size of frames and they all have some entry
+                // can we assume there are only numFrames in range for process and break early for local.
+            }
+        }
+
+        int maxDistance = -1;
         
+        for (int frame : usedFrames) {
+            if (frame >= frameRange.first && frame <= frameRange.second) {
+                int distance = nextUse.count(frame) ? nextUse[frame] - accessIndex : INT_MAX;
+                if (distance > maxDistance) {
+                    maxDistance = distance;
+                    evictedFrame = frame;
+                }
+            }
+        }
     }
     if (evictedFrame == -1) {
         cerr << "Error: No frame available for eviction in the specified range for Process ID: " << processId << endl;
@@ -423,8 +456,9 @@ void VirtualMemoryManagerL::accessMemory(int processId, uint64_t virtualAddress,
         cout << "Page fault for Process ID: " << processId
              << ", Virtual Address: " << virtualAddress << endl;
         pagefaults++;
+        pagefaultvector[processId]++;
         cout << pagefaults;
-        assignFrameToProcess(processId, pageIndex);
+        assignFrameToProcess(processId, pageIndex, accessIndex, futureAccesses);
     }
 }
 
@@ -456,6 +490,10 @@ int main(int argc, char *argv[]) {
             VirtualMemoryManager vmm(pageSize, numFrames);
             vmm.processTraceFile(traceFilePath);
             cout << "Page faults: " << pagefaults << endl;
+            cout <<"Page faults for individual processes: "<<endl;
+            for (auto i: pagefaultvector){
+                cout<<i<<endl;
+            }
         } catch (const exception &e) {
             cerr << "Error: " << e.what() << endl;
             return 1;
@@ -471,6 +509,10 @@ int main(int argc, char *argv[]) {
             VirtualMemoryManagerL vmm(pageSize, numFrames, numProcesses);
             vmm.processTraceFile(traceFilePath);
             cout << "Page faults: " << pagefaults << endl;
+            cout <<"Page faults for individual processes: "<<endl;
+            for (auto i: pagefaultvector){
+                cout<<i<<endl;
+            }
         } catch (const exception &e) {
             cerr << "Error: " << e.what() << endl;
             return 1;
