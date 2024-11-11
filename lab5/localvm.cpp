@@ -161,6 +161,11 @@ void VirtualMemoryManager::accessMemory(int processId, uint64_t virtualAddress, 
                             nextUse[entry.currentframe] = i;
                         }
                         //ensures that earliest access to frame is preserved
+                        if(nextUse.size()==maxFrames){
+                            break;
+                        }
+                        //but there can be multiple frames so you have to check if size is size of frames and they all have some entry
+                        // can we assume there are only numFrames in range for process and break early for local.
                     }
                 }
 
@@ -287,11 +292,11 @@ void VirtualMemoryManagerL::assignFrameToProcess(int processId, uint64_t pageInd
         if (isFrameFree(frame)) {
             // Frame is free, assign it to the process
             processPageTables[processId].addEntry(pageIndex, frame);
-            PageTableEntry entry;
-            processPageTables[processId].getEntry(pageIndex, entry);
-            cout << "free entry Page Index: " << static_cast<uint64_t>(entry.pageIndex) << endl;
-            cout << "free entry Valid: " << (entry.valid ? "true" : "false") << endl;
-            cout << "free entry Current Frame: " << entry.currentframe << endl;
+            // PageTableEntry entry;
+            // processPageTables[processId].getEntry(pageIndex, entry);
+            // cout << "free entry Page Index: " << static_cast<uint64_t>(entry.pageIndex) << endl;
+            // cout << "free entry Valid: " << (entry.valid ? "true" : "false") << endl;
+            // cout << "free entry Current Frame: " << entry.currentframe << endl;
             fifoQueue.push(frame);
             lruQueue.push_back(frame);
             usedFrames.push_back(frame);
@@ -306,8 +311,8 @@ void VirtualMemoryManagerL::assignFrameToProcess(int processId, uint64_t pageInd
         int evictedFrame = evictFrameFromRange(processId); // Eviction logic within range
         removeEntry(evictedFrame);
         processPageTables[processId].addEntry(pageIndex, evictedFrame);
-        PageTableEntry entry;
-        processPageTables[processId].getEntry(pageIndex, entry);
+        // PageTableEntry entry;
+        // processPageTables[processId].getEntry(pageIndex, entry);
         // cout << "Eviction entry Page Index: " << static_cast<uint64_t>(entry.pageIndex) << endl;
         // cout << "Eviction entry Valid: " << (entry.valid ? "true" : "false") << endl;
         // cout << "Eviction entry Current Frame: " << entry.currentframe << endl;
@@ -352,7 +357,6 @@ int VirtualMemoryManagerL::evictFrameFromRange(int processId) {
             evictedFrame = lruQueue.front();
             lruQueue.pop_front();
             if (evictedFrame >= frameRange.first && evictedFrame <= frameRange.second) {
-                
                 break;
             } else {
                 tempQueue.push_back(evictedFrame);  // Keep frames out of range
@@ -361,6 +365,26 @@ int VirtualMemoryManagerL::evictFrameFromRange(int processId) {
         for (int frame : tempQueue) {
             lruQueue.push_back(frame);
         }
+    }
+    else if (replacementPolicy == "random") {
+        list<int> tempQueue;
+        while(!usedFrames.size()==0){
+            int randomIndex = rand() % usedFrames.size();
+            evictedFrame = usedFrames[randomIndex];
+            usedFrames.erase(usedFrames.begin() + randomIndex);
+             if (evictedFrame >= frameRange.first && evictedFrame <= frameRange.second) {
+                break;
+            } else {
+                tempQueue.push_back(evictedFrame);  // Keep frames out of range
+            }
+        }
+        for (int frame : tempQueue) {
+            usedFrames.push_back(frame);
+        }
+
+    }
+    else if (replacementPolicy == "optimal") {
+        
     }
     if (evictedFrame == -1) {
         cerr << "Error: No frame available for eviction in the specified range for Process ID: " << processId << endl;
